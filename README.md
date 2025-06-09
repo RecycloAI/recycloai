@@ -33,12 +33,12 @@ RecycloAI uses AI and computer vision to automate waste classification, optimize
 
 ## 👥 Team Members & Roles
 
-| Name             | Reg No.                                 | Role                                        |
-|------------------|--------------------------------------|----------------------------------------------------------|
-| Josiah Ndirangu  | SCT  | ML models, Django backend, architecture                 |
-| Geofrey Gitau    | Frontend Developer                   | UI/UX, frontend integration, user dashboard             |
-| Daniel Wekesa    | Data Engineer                        | Data pipelines, model training, waste dataset handling  |
-| Bonface          | DevOps & Deployment                  | Docker, CI/CD, cloud setup                              |
+| Name               | Reg No.                | Role                                               |
+|--------------------|------------------------|----------------------------------------------------|
+| Josiah Ndirangu    | SCT212-0111/2022       | Project lead. Full stack developer. AI/ML Engineer |
+| Geofrey Gitau      | SCT212-0464/2022       | Backend developer                                 |
+| Daniel Wekesa      | SCT212-0183/2022       | Front-end developer                                |
+| Boniface Mwangi    | SCT212-0726/2022       | Full stack developer                               |
 
 
 
