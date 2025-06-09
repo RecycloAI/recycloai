@@ -107,32 +107,28 @@ python manage.py test
 ## 📁 Project Structure (WIP)
 
 ```
-RecycloAI/  
-├── backend/  
-│   ├── recycloai/                # Django project  
-│   │   ├── settings.py  
-│   │   ├── urls.py  
-│   │   └── wsgi.py  
-│   ├── waste_classifier/         # Main app  
-│   │   ├── templates/            # Frontend HTML  
-│   │   │   ├── base.html         # Base template  
-│   │   │   ├── index.html        # Homepage  
-│   │   │   ├── classify.html     # Upload/result page  
-│   │   │   └── stats.html        # Analytics  
-│   │   ├── static/               # CSS/JS/Images  
-│   │   │   ├── css/  
-│   │   │   │   └── style.css     # Custom styles  
-│   │   │   ├── js/  
-│   │   │   │   └── script.js     # Frontend logic  
-│   │   │   └── images/           # Logos/icons  
-│   │   ├── models.py  
-│   │   ├── views.py              # Updated for template rendering  
-│   │   └── urls.py  
-│   ├── static/                   # Global static files  
-│   └── manage.py  
-├── dataset/  
-├── docs/  
-└── README.md   
+RECYCLOAI/                  # Root project folder (non-Django)
+├── backend/                # Django project root (now contains manage.py)
+│   ├── recycloai/          # Project config (settings/urls/wsgi)
+│   │   ├── __init__.py
+│   │   ├── settings.py
+│   │   ├── urls.py
+│   │   └── wsgi.py
+│   ├── waste_classifier/   # app
+│   │   ├── migrations/
+│   │   ├── __init__.py
+│   │   ├── admin.py
+│   │   ├── apps.py
+│   │   ├── models.py
+│   │   ├── views.py
+│   │   └── urls.py
+│   └── manage.py           
+├── static/                 # Global static files
+├── venv/                   # Virtual environment
+├── dataset/                # Training data
+├── docs/                   # Documentation
+├── .gitignore
+└── README.md 
 ```
 
 
