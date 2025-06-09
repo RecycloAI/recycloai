@@ -107,15 +107,28 @@ python manage.py test
 ## 📁 Project Structure (WIP)
 
 ```
-recycloai/
-├── core/                  # Django apps
-├── ai_model/              # Waste classifier models
-├── templates/             # Frontend templates
-├── static/                # CSS/JS/image assets
-├── media/                 # Uploaded waste images
-├── requirements.txt
-├── manage.py
-└── README.md
+RecycloAI/  
+├── backend/                      # Django backend  
+│   ├── recycloai/                # Django project  
+│   │   ├── settings.py           # Project settings  
+│   │   ├── urls.py               # Main URLs  
+│   │   └── wsgi.py               # WSGI config  
+│   ├── waste_classifier/         # Django app (AI model integration)  
+│   │   ├── models.py             # Database models  
+│   │   ├── views.py              # API/Logic for waste classification  
+│   │   ├── serializers.py        # API serializers  
+│   │   ├── ml_model/             # AI model files  
+│   │   │   ├── model.h5          # Pretrained model (TensorFlow/Keras)  
+│   │   │   └── preprocess.py     # Image preprocessing  
+│   │   └── urls.py               # App-specific URLs  
+│   ├── static/                   # Static files (CSS, JS, images)  
+│   ├── templates/                # Frontend templates (if not using React)  
+│   └── manage.py                 # Django CLI  
+├── frontend/                     # (Optional: React/Flutter)  
+├── dataset/                      # Waste classification dataset  
+├── docs/                         # Documentation  
+├── requirements.txt              # Python dependencies  
+└── README.md                     # Project overview  
 ```
 
 
