@@ -108,34 +108,38 @@ python manage.py test
 
 ```
 RecycloAI/  
-├── backend/                      # Django backend  
+├── backend/  
 │   ├── recycloai/                # Django project  
-│   │   ├── settings.py           # Project settings  
-│   │   ├── urls.py               # Main URLs  
-│   │   └── wsgi.py               # WSGI config  
-│   ├── waste_classifier/         # Django app (AI model integration)  
-│   │   ├── models.py             # Database models  
-│   │   ├── views.py              # API/Logic for waste classification  
-│   │   ├── serializers.py        # API serializers  
-│   │   ├── ml_model/             # AI model files  
-│   │   │   ├── model.h5          # Pretrained model (TensorFlow/Keras)  
-│   │   │   └── preprocess.py     # Image preprocessing  
-│   │   └── urls.py               # App-specific URLs  
-│   ├── static/                   # Static files (CSS, JS, images)  
-│   ├── templates/                # Frontend templates (if not using React)  
-│   └── manage.py                 # Django CLI  
-├── frontend/                     # (Optional: React/Flutter)  
-├── dataset/                      # Waste classification dataset  
-├── docs/                         # Documentation  
-├── requirements.txt              # Python dependencies  
-└── README.md                     # Project overview  
+│   │   ├── settings.py  
+│   │   ├── urls.py  
+│   │   └── wsgi.py  
+│   ├── waste_classifier/         # Main app  
+│   │   ├── templates/            # Frontend HTML  
+│   │   │   ├── base.html         # Base template  
+│   │   │   ├── index.html        # Homepage  
+│   │   │   ├── classify.html     # Upload/result page  
+│   │   │   └── stats.html        # Analytics  
+│   │   ├── static/               # CSS/JS/Images  
+│   │   │   ├── css/  
+│   │   │   │   └── style.css     # Custom styles  
+│   │   │   ├── js/  
+│   │   │   │   └── script.js     # Frontend logic  
+│   │   │   └── images/           # Logos/icons  
+│   │   ├── models.py  
+│   │   ├── views.py              # Updated for template rendering  
+│   │   └── urls.py  
+│   ├── static/                   # Global static files  
+│   └── manage.py  
+├── dataset/  
+├── docs/  
+└── README.md   
 ```
 
 
 ## 🔍 Roadmap
 
 * [x] Django backend setup
-* [x] ML model for waste classification
+* [ ] ML model for waste classification
 * [ ] Frontend integration
 * [ ] Real-time smart bin integration
 * [ ] Deploy to cloud platform
