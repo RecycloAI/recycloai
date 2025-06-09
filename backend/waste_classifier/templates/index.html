@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6 mx-auto text-center">
+        <h1 class="display-4">Smart Waste Classification</h1>
+        <p class="lead">Upload an image to identify recyclable materials</p>
+        <a href="{% url 'classify_page' %}" class="btn btn-success btn-lg mt-3">Get Started</a>
+
+    </div>
+</div>
+{% endblock %}

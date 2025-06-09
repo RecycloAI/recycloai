@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <h2 class="mb-4">♻️ Waste Analytics Dashboard</h2>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row row-cols-1 row-cols-md-3 g-4 mb-4">
+        <div class="col">
+            <div class="card h-100 border-success">
+                <div class="card-body">
+                    <h5 class="card-title">Total Classifications</h5>
+                    <p class="display-6">{{ total_classifications }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="card h-100 border-primary">
+                <div class="card-body">
+                    <h5 class="card-title">Recycling Rate</h5>
+                    <p class="display-6">{{ recycling_rate }}%</p>
+                </div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="card h-100 border-warning">
+                <div class="card-body">
+                    <h5 class="card-title">Top Material</h5>
+                    <p class="display-6">{{ top_material }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Section -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-light">
+                    <h5>Waste Distribution</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="materialChart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-light">
+                    <h5>Weekly Trends</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="trendChart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Activity Table -->
+    <div class="card shadow-sm">
+        <div class="card-header bg-light">
+            <h5>Recent Classifications</h5>
+        </div>
+        <div class="card-body table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Material</th>
+                        <th>Disposal Method</th>
+                        <th>Confidence</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in recent_classifications %}
+                    <tr>
+                        <td>{{ item.timestamp|date:"M d, Y" }}</td>
+                        <td><span class="badge bg-{{ item.material|lower }}">{{ item.material }}</span></td>
+                        <td>{{ item.disposal_method }}</td>
+                        <td>{{ item.confidence }}%</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Chart.js Script -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Material Distribution Chart
+    const materialCtx = document.getElementById('materialChart').getContext('2d');
+    new Chart(materialCtx, {
+        type: 'doughnut',
+        data: {
+            labels: {{ material_labels|safe }},
+            datasets: [{
+                data: {{ material_data|safe }},
+                backgroundColor: [
+                    '#2ecc71', '#3498db', '#f1c40f', '#e74c3c', '#9b59b6'
+                ]
+            }]
+        }
+    });
+
+    // Weekly Trends Chart
+    const trendCtx = document.getElementById('trendChart').getContext('2d');
+    new Chart(trendCtx, {
+        type: 'line',
+        data: {
+            labels: {{ week_labels|safe }},
+            datasets: [
+                {
+                    label: 'Recyclable',
+                    data: {{ recyclable_data|safe }},
+                    borderColor: '#2ecc71',
+                    tension: 0.3
+                },
+                {
+                    label: 'Landfill',
+                    data: {{ landfill_data|safe }},
+                    borderColor: '#e74c3c',
+                    tension: 0.3
+                }
+            ]
+        }
+    });
+</script>
+
+<style>
+    /* Custom badge colors */
+    .badge.bg-plastic { background-color: #3498db; }
+    .badge.bg-paper { background-color: #f1c40f; color: #000; }
+    .badge.bg-metal { background-color: #95a5a6; }
+    .badge.bg-organic { background-color: #e67e22; }
+    
+    /* Mobile optimizations */
+    @media (max-width: 768px) {
+        .display-6 { font-size: 1.5rem; }
+        .table td, .table th { padding: 0.5rem; }
+    }
+</style>
+{% endblock %}
