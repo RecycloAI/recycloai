@@ -29,9 +29,9 @@ const Footer = () => {
             <h3 className="text-lg font-semibold mb-4">Quick Links</h3>
             <ul className="space-y-2 text-sm">
               <li><Link to="/" className="text-gray-400 hover:text-white">Home</Link></li>
-              <li><Link to="/about" className="text-gray-400 hover:text-white">About</Link></li>
+              {/*<li><Link to="/about" className="text-gray-400 hover:text-white">About</Link></li>
               <li><Link to="/features" className="text-gray-400 hover:text-white">Features</Link></li>
-              <li><Link to="/services" className="text-gray-400 hover:text-white">Services</Link></li>
+              <li><Link to="/services" className="text-gray-400 hover:text-white">Services</Link></li>*/}
             </ul>
           </div>
 
@@ -39,7 +39,7 @@ const Footer = () => {
           <div>
             <h3 className="text-lg font-semibold mb-4">Resources</h3>
             <ul className="space-y-2 text-sm">
-              <li><Link to="/blog" className="text-gray-400 hover:text-white">Blog</Link></li>
+              {/* <li><Link to="/blog" className="text-gray-400 hover:text-white">Blog</Link></li> */}
               <li><Link to="/contact" className="text-gray-400 hover:text-white">Contact</Link></li>
               <li><a href="#" className="text-gray-400 hover:text-white">Privacy Policy</a></li>
               <li><a href="#" className="text-gray-400 hover:text-white">Terms of Service</a></li>
