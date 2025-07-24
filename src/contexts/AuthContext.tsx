@@ -31,18 +31,11 @@ export const useAuth = () => {
   return context;
 };
 
-function debounce<F extends (...args: any[]) => any>(func: F, wait: number): F {
-  let timeout: ReturnType<typeof setTimeout>;
-  return ((...args: Parameters<F>) => {
-    clearTimeout(timeout);
-    timeout = setTimeout(() => func(...args), wait);
-  }) as F;
-}
-
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<UserRecord | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   const createDefaultProfile = useCallback(async (userId: string) => {
     try {
@@ -102,20 +95,31 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [createDefaultProfile]);
 
-  const handleAuthChange = useCallback(debounce(async (event: string, session: Session | null) => {
+  const handleAuthChange = useCallback(async (event: string, session: Session | null) => {
     console.log('Auth state change:', event);
+    
+    // Prevent duplicate processing during initial load
+    if (event === 'SIGNED_IN' && !isInitialized) {
+      return;
+    }
+    
     setSession(session);
     
-    if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
-      if (session?.user) {
+    if (session?.user) {
+      // Only fetch profile if we don't already have user data or if the user ID changed
+      if (!user || user.id !== session.user.id) {
         await fetchUserProfile(session.user.id);
       }
-    } else if (event === 'SIGNED_OUT') {
+    } else {
       setUser(null);
     }
     
+    if (!isInitialized) {
+      setIsInitialized(true);
+    }
+    
     setIsLoading(false);
-  }, 300), [fetchUserProfile]);
+  }, [fetchUserProfile, user, isInitialized]);
 
   useEffect(() => {
     let mounted = true;
@@ -129,6 +133,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (error) {
           console.error('Error getting session:', error);
           setIsLoading(false);
+          setIsInitialized(true);
           return;
         }
 
@@ -137,6 +142,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (!mounted) return;
         console.error('Error initializing auth:', error);
         setIsLoading(false);
+        setIsInitialized(true);
       }
     };
 
@@ -157,18 +163,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
       if (error) {
         console.error('Login error:', error);
+        setIsLoading(false);
         return { success: false, error: error.message };
       }
 
+      // Don't set loading to false here - let the auth state change handler do it
       return { success: true };
     } catch (error) {
       console.error('Unexpected login error:', error);
+      setIsLoading(false);
       return { 
         success: false, 
         error: error instanceof Error ? error.message : 'An unexpected error occurred' 
       };
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -183,43 +190,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       if (error) {
         console.error('Registration error:', error);
+        setIsLoading(false);
         return { success: false, error: error.message };
       }
 
+      // Don't set loading to false here - let the auth state change handler do it
       return { success: true };
     } catch (error) {
       console.error('Unexpected registration error:', error);
+      setIsLoading(false);
       return { 
         success: false, 
         error: error instanceof Error ? error.message : 'An unexpected error occurred' 
       };
-    } finally {
-      setIsLoading(false);
     }
   };
 
   const logout = async () => {
     try {
       setIsLoading(true);
-      // Clear local state first for immediate UI update
-      setUser(null);
-      setSession(null);
       
-      // Then perform the actual sign out
       const { error } = await supabase.auth.signOut();
       
       if (error) {
         console.error('Error logging out:', error);
-        // Restore state if logout failed
-        const { data: { session } } = await supabase.auth.getSession();
-        setSession(session);
-        if (session?.user) {
-          await fetchUserProfile(session.user.id);
-        }
+        setIsLoading(false);
       }
+      // Don't manually clear state here - let the auth state change handler do it
     } catch (error) {
       console.error('Unexpected error during logout:', error);
-    } finally {
       setIsLoading(false);
     }
   };

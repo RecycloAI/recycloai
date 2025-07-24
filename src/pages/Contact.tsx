@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
 import { Mail, Phone, MapPin, Clock, MessageSquare, HelpCircle } from 'lucide-react';
+import MapComponent from '@/components/MapComponent';
 
 const Contact = () => {
   const [formData, setFormData] = useState({
@@ -45,20 +46,21 @@ const Contact = () => {
     {
       icon: <Mail className="h-6 w-6 text-green-600" />,
       title: "Email",
-      details: "support@recycloai.com",
+      details: "recycloai20@gmail.com",
       description: "Send us an email anytime"
     },
     {
       icon: <Phone className="h-6 w-6 text-blue-600" />,
       title: "Phone",
-      details: "+1 (555) 123-4567",
-      description: "Mon-Fri from 8am to 6pm PST"
+      details: "+254 717 234435",
+      description: "Mon-Fri from 8am to 6pm EAT"
     },
     {
       icon: <MapPin className="h-6 w-6 text-purple-600" />,
       title: "Office",
-      details: "San Francisco, CA",
-      description: "123 Green Street, Suite 456"
+      details: "Nairobi, Kenya",
+      description: "JKUAT, JHUB AFRICA",
+      
     },
     {
       icon: <Clock className="h-6 w-6 text-orange-600" />,
@@ -213,15 +215,15 @@ const Contact = () => {
                     <MapPin className="h-5 w-5 text-gray-400 mt-1" />
                     <div>
                       <p className="text-gray-900 font-medium">RecycloAI Headquarters</p>
-                      <p className="text-gray-600">123 Green Street, Suite 456</p>
-                      <p className="text-gray-600">San Francisco, CA 94102</p>
+                      <p className="text-gray-600">JHUB AFRICA , JKUAT</p>
+                      <p className="text-gray-600">Nairobi , Kenya</p>
                     </div>
                   </div>
                   <div className="flex items-start space-x-3">
                     <Clock className="h-5 w-5 text-gray-400 mt-1" />
                     <div>
                       <p className="text-gray-900 font-medium">Office Hours</p>
-                      <p className="text-gray-600">Monday - Friday: 8:00 AM - 6:00 PM PST</p>
+                      <p className="text-gray-600">Monday - Friday: 8:00 AM - 6:00 PM EAT</p>
                       <p className="text-gray-600">Saturday - Sunday: Closed</p>
                     </div>
                   </div>
@@ -229,11 +231,8 @@ const Contact = () => {
               </div>
 
               {/* Map Placeholder */}
-              <div className="bg-gray-200 rounded-lg h-64 flex items-center justify-center">
-                <div className="text-center">
-                  <MapPin className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-                  <p className="text-gray-500">Interactive map would be here</p>
-                </div>
+              <div className="bg-white rounded-lg h-64 overflow-hidden shadow-sm">
+                  <MapComponent />
               </div>
             </div>
           </div>

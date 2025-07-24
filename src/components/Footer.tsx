@@ -17,10 +17,41 @@ const Footer = () => {
               Smart recycling powered by AI. Making waste management intelligent and sustainable.
             </p>
             <div className="flex space-x-4">
+              {/* <a 
+              href="https://www.facebook.com/yourpage" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              aria-label="Facebook"
+              >
               <Facebook className="h-5 w-5 text-gray-400 hover:text-white cursor-pointer" />
+              </a> */}
+
+              <a 
+              href="https://www.twitter.com/TheRecycloAI" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              aria-label="Twitter"
+              >
               <Twitter className="h-5 w-5 text-gray-400 hover:text-white cursor-pointer" />
+              </a>
+
+              <a 
+              href="https://www.instagram.com/recyclo_ai/" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              aria-label="Instagram"
+              >
               <Instagram className="h-5 w-5 text-gray-400 hover:text-white cursor-pointer" />
+              </a>
+
+              <a 
+              href="https://www.linkedin.com/in/recycloai-ai-11173a36a/" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              aria-label="LinkedIn"
+              >
               <Linkedin className="h-5 w-5 text-gray-400 hover:text-white cursor-pointer" />
+              </a>
             </div>
           </div>
 
@@ -41,8 +72,8 @@ const Footer = () => {
             <ul className="space-y-2 text-sm">
               {/* <li><Link to="/blog" className="text-gray-400 hover:text-white">Blog</Link></li> */}
               <li><Link to="/contact" className="text-gray-400 hover:text-white">Contact</Link></li>
-              <li><a href="#" className="text-gray-400 hover:text-white">Privacy Policy</a></li>
-              <li><a href="#" className="text-gray-400 hover:text-white">Terms of Service</a></li>
+              {/* <li><a href="#" className="text-gray-400 hover:text-white">Privacy Policy</a></li>
+              <li><a href="#" className="text-gray-400 hover:text-white">Terms of Service</a></li> */}
             </ul>
           </div>
 
@@ -50,9 +81,9 @@ const Footer = () => {
           <div>
             <h3 className="text-lg font-semibold mb-4">Contact</h3>
             <div className="space-y-2 text-sm text-gray-400">
-              <p>support@recycloai.com</p>
-              <p>+1 (555) 123-4567</p>
-              <p>San Francisco, CA</p>
+              <p>recycloai20@gmail.com</p>
+              <p>+254 717 234435 </p>
+              <p>Nairobi, Kenya</p>
             </div>
           </div>
         </div>
