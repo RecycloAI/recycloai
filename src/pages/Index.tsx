@@ -4,8 +4,12 @@ import { Button } from '@/components/ui/button';
 import Navigation from '@/components/Navigation';
 import Footer from '@/components/Footer';
 import { Recycle, Scan, TrendingUp, Users, Award, Camera, Brain, Leaf } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 const Index = () => {
+
+  const { user, isLoading } = useAuth();
+  const isAuthenticated = !isLoading && user;
   return (
     <div className="min-h-screen bg-white">
       <Navigation />
@@ -23,17 +27,17 @@ const Index = () => {
               Making recycling intelligent and sustainable.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link to="/register">
+              <Link to={isAuthenticated ? "/dashboard" : "/signin"}>
                 <Button size="lg" className="bg-green-600 hover:bg-green-700 text-white px-8 py-4 text-lg">
                   <Camera className="mr-2 h-5 w-5" />
                   Scan Waste Now
                 </Button>
               </Link>
-              <Link to="/features">
+              {/* <Link to="/dashboard">
                 <Button variant="outline" size="lg" className="px-8 py-4 text-lg">
                   Try Demo
                 </Button>
-              </Link>
+              </Link> */}
             </div>
           </div>
         </div>
@@ -133,13 +137,13 @@ const Index = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-3xl font-bold text-gray-900 mb-4">Ready to Start Recycling Smarter?</h2>
           <p className="text-lg text-gray-600 mb-8">Join thousands of users making a positive environmental impact</p>
-          <Link to="/register">
+          <Link to={isAuthenticated ? "/dashboard" : "/signin"}>
             <Button size="lg" className="bg-green-600 hover:bg-green-700 text-white px-8 py-4 text-lg">
               Get Started Free
             </Button>
           </Link>
         </div>
-      </section>
+      </section>  
 
       <Footer />
     </div>
