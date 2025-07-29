@@ -2,7 +2,7 @@ import { useState } from 'react';
 import Navigation from '@/components/Navigation';
 import Footer from '@/components/Footer';
 import { useAuth } from '../contexts/AuthContext';
-import WasteScanner from '../components/WasteScanner';
+import {WasteScanner} from '../components/WasteScanner';
 import { Button } from '@/components/ui/button';
 import { Camera, TrendingUp, Award, History, User, Scan } from 'lucide-react';
 import Spinner from '@/components/Spinner';

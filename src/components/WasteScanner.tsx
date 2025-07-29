@@ -4,6 +4,14 @@ import { useToast } from '@/hooks/use-toast';
 import { Camera, Upload, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 import { scanService } from '@/lib/scanService';
 import { useAuth } from '@/contexts/AuthContext';
+import { Camera as CameraComponent } from '@/components/Camera';
+import { Camera as CameraIcon } from 'lucide-react';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY
+);
 
 interface ScanResult {
   material: string;
@@ -14,7 +22,7 @@ interface ScanResult {
   recyclable: boolean;
 }
 
-const WasteScanner = () => {
+export function WasteScanner() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
@@ -22,8 +30,9 @@ const WasteScanner = () => {
   const { toast } = useToast();
   const { user } = useAuth();
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [showCamera, setShowCamera] = useState(false);
 
-  // Mock AI results for demo purposes
+  // Mock AI results
   const mockResults: ScanResult[] = [
     {
       material: "Plastic Bottle",
@@ -59,6 +68,66 @@ const WasteScanner = () => {
     }
   ];
 
+  const handleUploadComplete = async (imagePath: string) => {
+    try {
+      // Get public URL of the uploaded image
+      const { data: { publicUrl } } = supabase.storage
+        .from('waste-images')
+        .getPublicUrl(imagePath);
+      
+      // Set the image for display
+      setSelectedImage(publicUrl);
+      
+      // Create a File object from the URL for analysis
+      const response = await fetch(publicUrl);
+      const blob = await response.blob();
+      const file = new File([blob], imagePath.split('/').pop() || 'captured.jpg', {
+        type: blob.type
+      });
+      setImageFile(file);
+      
+    } catch (error) {
+      console.error('Error handling camera image:', error);
+      toast({
+        title: "Image error",
+        description: "Could not process captured image",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleClassify = async (imagePath: string) => {
+    try {
+      setIsScanning(true);
+      setScanResult(null);
+      
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('waste-images')
+        .getPublicUrl(imagePath);
+
+      // Call classification function
+      const classification = await classifyWasteImage(publicUrl);
+      
+      // Update UI with results
+      setScanResult(classification);
+      toast({
+        title: "Scan complete!",
+        description: `Identified as ${classification.material} with ${classification.confidence}% confidence.`,
+      });
+    } catch (error) {
+      console.error('Classification error:', error);
+      toast({
+        title: "Classification failed",
+        description: "Could not classify image. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsScanning(false);
+      setShowCamera(false);
+    }
+  };
+
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
@@ -93,38 +162,33 @@ const WasteScanner = () => {
     setIsScanning(true);
     setScanResult(null);
 
-    // Upload to Supabase
-    const imageUrl = await scanService.uploadImage(imageFile, user.id);
-    if (!imageUrl) {
+    try {
+      // Upload to Supabase (for file uploads)
+      const imageUrl = await scanService.uploadImage(imageFile, user.id);
+      if (!imageUrl) {
+        throw new Error("Upload failed");
+      }
+
+      // Simulate AI processing
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Mock result
+      const randomResult = mockResults[Math.floor(Math.random() * mockResults.length)];
+      setScanResult(randomResult);
+
+      toast({
+        title: "Scan complete!",
+        description: `Identified as ${randomResult.material} with ${randomResult.confidence}% confidence.`,
+      });
+    } catch (error) {
       toast({
         title: "Upload failed",
         description: "Could not upload image. Please try again.",
         variant: "destructive",
       });
+    } finally {
       setIsScanning(false);
-      return;
     }
-
-    // Simulate AI processing delay
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
-    // Mock AI result (randomly select one)
-    const randomResult = mockResults[Math.floor(Math.random() * mockResults.length)];
-    setScanResult(randomResult);
-    setIsScanning(false);
-
-    toast({
-      title: "Scan complete!",
-      description: `Identified as ${randomResult.material} with ${randomResult.confidence}% confidence.`,
-    });
-  };
-
-  const handleCameraCapture = () => {
-    // In a real app, this would open camera
-    toast({
-      title: "Camera feature",
-      description: "Camera capture would be implemented with getUserMedia API.",
-    });
   };
 
   return (
@@ -134,7 +198,7 @@ const WasteScanner = () => {
         <p className="text-gray-600">Upload an image or take a photo to identify waste and get disposal instructions</p>
       </div>
 
-      {/* Upload Section */}
+      {/* Image Display Area */}
       <div className="border-2 border-dashed border-gray-300 rounded-lg p-8">
         {selectedImage ? (
           <div className="text-center">
@@ -165,6 +229,7 @@ const WasteScanner = () => {
                   setScanResult(null);
                   if (fileInputRef.current) fileInputRef.current.value = '';
                 }}
+                disabled={isScanning}
               >
                 Clear
               </Button>
@@ -184,25 +249,34 @@ const WasteScanner = () => {
                 Choose File
               </Button>
               <Button 
-                onClick={handleCameraCapture}
+                onClick={() => setShowCamera(true)}
                 variant="outline"
               >
-                <Camera className="mr-2 h-4 w-4" />
+                <CameraIcon className="mr-2 h-4 w-4" />
                 Use Camera
               </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
+                className="hidden"
+              />
             </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleImageUpload}
-              className="hidden"
-            />
           </div>
         )}
       </div>
 
-      {/* Results Section */}
+      {/* Camera Modal */}
+      {showCamera && (
+        <CameraComponent 
+          onUploadComplete={handleUploadComplete}
+          onClassify={handleClassify}
+          onClose={() => setShowCamera(false)}
+        />
+      )}
+
+      {/* Results Display */}
       {scanResult && (
         <div className="bg-white border rounded-lg p-6 shadow-sm">
           <div className="flex items-start space-x-4">
@@ -244,6 +318,22 @@ const WasteScanner = () => {
       )}
     </div>
   );
-};
+}
 
-export default WasteScanner;
+async function classifyWasteImage(imageUrl: string): Promise<ScanResult> {
+  // Mock implementation - replace with actual API call
+  const mockResults = [
+    {
+      material: "Plastic Bottle",
+      category: "PET Plastic",
+      confidence: 97,
+      instructions: "Remove cap and label. Rinse thoroughly. Place in blue recycling bin.",
+      binColor: "Blue",
+      recyclable: true
+    },
+    // ... other mock results
+  ];
+  
+  await new Promise(resolve => setTimeout(resolve, 1000));
+  return mockResults[Math.floor(Math.random() * mockResults.length)];
+}
