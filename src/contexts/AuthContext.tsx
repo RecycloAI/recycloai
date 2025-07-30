@@ -19,6 +19,8 @@ interface AuthContextType {
   register: (name: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   isLoading: boolean;
+  rank: number | null;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -36,6 +38,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [rank, setRank] = useState<number | null>(null);
 
   const createDefaultProfile = useCallback(async (userId: string) => {
     try {
@@ -95,6 +98,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [createDefaultProfile]);
 
+  const fetchRank = useCallback(async (userId: string) => {
+    try {
+      const { data, error } = await supabase.rpc('get_user_rank', { user_id: userId });
+      if (error) {
+        console.error('Error fetching rank:', error);
+        return;
+      }
+      setRank(data);
+    } catch (error) {
+      console.error('Error fetching rank:', error);
+    }
+  }, []);
+
+  const refreshProfile = useCallback(async () => {
+    if (user?.id) {
+      await fetchUserProfile(user.id);
+      await fetchRank(user.id);
+    }
+  }, [user?.id, fetchUserProfile, fetchRank]);
+
   const handleAuthChange = useCallback(async (event: string, session: Session | null) => {
     console.log('Auth state change:', event);
     
@@ -109,9 +132,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Only fetch profile if we don't already have user data or if the user ID changed
       if (!user || user.id !== session.user.id) {
         await fetchUserProfile(session.user.id);
+        await fetchRank(session.user.id);
       }
     } else {
       setUser(null);
+      setRank(null);
     }
     
     if (!isInitialized) {
@@ -119,7 +144,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
     
     setIsLoading(false);
-  }, [fetchUserProfile, user, isInitialized]);
+  }, [fetchUserProfile, fetchRank, user, isInitialized]);
 
   useEffect(() => {
     let mounted = true;
@@ -224,7 +249,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, login, register, logout, isLoading }}>
+    <AuthContext.Provider 
+      value={{ 
+        user, 
+        session, 
+        login, 
+        register, 
+        logout, 
+        isLoading, 
+        rank, 
+        refreshProfile 
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

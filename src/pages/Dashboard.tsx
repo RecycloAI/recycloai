@@ -2,14 +2,19 @@ import { useState } from 'react';
 import Navigation from '@/components/Navigation';
 import Footer from '@/components/Footer';
 import { useAuth } from '../contexts/AuthContext';
-import {WasteScanner} from '../components/WasteScanner';
+import { WasteScanner } from '../components/WasteScanner';
 import { Button } from '@/components/ui/button';
 import { Camera, TrendingUp, Award, History, User, Scan } from 'lucide-react';
 import Spinner from '@/components/Spinner';
 import LoginPrompt from '@/components/LoginPrompt';
+import ScanHistory from '@/components/ScanHistory';
+import ImpactStats from '@/components/ImpactStats';
+import Achievements from '@/components/Achievements';
+import UserProfile from '@/components/UserProfile';
 
 const Dashboard = () => {
-  const { user, isLoading } = useAuth();
+  // Only destructure what exists in your AuthContext
+  const { user, rank, isLoading, refreshProfile } = useAuth();
   const [activeTab, setActiveTab] = useState('scan');
 
   const tabs = [
@@ -21,8 +26,13 @@ const Dashboard = () => {
   ];
 
   if (isLoading) return <Spinner />;
-  if (!user) return <div style={{color: 'red', textAlign: 'center', marginTop: '2rem'}}>Could not load user profile. Please try again or contact support.</div>;
-  console.log('Dashboard user:', user);
+  // Changed: Only check for user, not profile
+  if (!user) return <LoginPrompt />;
+
+  const handleScanSuccess = () => {
+    // Refresh profile data after successful scan
+    refreshProfile();
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -30,9 +40,15 @@ const Dashboard = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Welcome back, {user?.name || user?.email || 'User'}!</h1>
-          <p className="text-gray-600 mt-2">Track your recycling impact and continue making a difference.</p>
+          <h1 className="text-3xl font-bold text-gray-900">
+            {/* Changed: Use user properties directly */}
+            Welcome back, {user.name || user.email || 'User'}!
+          </h1>
+          <p className="text-gray-600 mt-2">
+            Track your recycling impact and continue making a difference.
+          </p>
         </div>
+
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <div className="bg-white rounded-lg shadow-sm p-6">
@@ -40,7 +56,8 @@ const Dashboard = () => {
               <Scan className="h-8 w-8 text-blue-600" />
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Total Scans</p>
-                <p className="text-2xl font-bold text-gray-900">{user?.total_scans ?? 0}</p>
+                {/* Changed: Use user.total_scans instead of profile.total_scans */}
+                <p className="text-2xl font-bold text-gray-900">{user.total_scans}</p>
               </div>
             </div>
           </div>
@@ -49,7 +66,10 @@ const Dashboard = () => {
               <TrendingUp className="h-8 w-8 text-green-600" />
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">CO2 Saved</p>
-                <p className="text-2xl font-bold text-gray-900">{user?.co2_saved ?? 0}kg</p>
+                {/* Changed: Use user.co2_saved instead of profile.co2_saved */}
+                <p className="text-2xl font-bold text-gray-900">
+                  {user.co2_saved.toFixed(2)}kg
+                </p>
               </div>
             </div>
           </div>
@@ -58,7 +78,8 @@ const Dashboard = () => {
               <Award className="h-8 w-8 text-purple-600" />
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Points</p>
-                <p className="text-2xl font-bold text-gray-900">{user?.points ?? 0}</p>
+                {/* Changed: Use user.points instead of profile.points */}
+                <p className="text-2xl font-bold text-gray-900">{user.points}</p>
               </div>
             </div>
           </div>
@@ -67,11 +88,14 @@ const Dashboard = () => {
               <User className="h-8 w-8 text-orange-600" />
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Rank</p>
-                <p className="text-2xl font-bold text-gray-900">#47</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {rank ? `#${rank}` : '--'}
+                </p>
               </div>
             </div>
           </div>
         </div>
+
         {/* Tabs */}
         <div className="bg-white rounded-lg shadow-sm">
           <div className="border-b border-gray-200">
@@ -92,9 +116,15 @@ const Dashboard = () => {
               ))}
             </nav>
           </div>
+          
           <div className="p-6">
-            {activeTab === 'scan' && <WasteScanner />}
-            {/* You can add the other tab contents here as needed */}
+            {activeTab === 'scan' && (
+              <WasteScanner onScanSuccess={handleScanSuccess} />
+            )}
+            {activeTab === 'history' && <ScanHistory />}
+            {activeTab === 'stats' && <ImpactStats />}
+            {activeTab === 'achievements' && <Achievements />}
+            {activeTab === 'user' && <UserProfile />}
           </div>
         </div>
       </div>
