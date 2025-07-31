@@ -1,20 +1,19 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Navigation from '@/components/Navigation';
 import Footer from '@/components/Footer';
 import { useAuth } from '../contexts/AuthContext';
 import { WasteScanner } from '../components/WasteScanner';
-import { Button } from '@/components/ui/button';
 import { Camera, TrendingUp, Award, History, User, Scan } from 'lucide-react';
 import Spinner from '@/components/Spinner';
-import LoginPrompt from '@/components/LoginPrompt';
 import ScanHistory from '@/components/ScanHistory';
 import ImpactStats from '@/components/ImpactStats';
 import Achievements from '@/components/Achievements';
 import UserProfile from '@/components/UserProfile';
 
 const Dashboard = () => {
-  // Only destructure what exists in your AuthContext
-  const { user, rank, isLoading, refreshProfile } = useAuth();
+  const navigate = useNavigate();
+  const { user, rank, isLoading } = useAuth();
   const [activeTab, setActiveTab] = useState('scan');
 
   const tabs = [
@@ -25,13 +24,32 @@ const Dashboard = () => {
     { id: 'user', name: 'User', icon: <User className="h-5 w-5" /> },
   ];
 
-  if (isLoading) return <Spinner />;
-  // Changed: Only check for user, not profile
-  if (!user) return <LoginPrompt />;
+  useEffect(() => {
+    // Redirect immediately if not loading and no user
+    if (!isLoading && !user) {
+      navigate('/auth/signin');
+    }
+  }, [isLoading, user, navigate]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Spinner />
+      </div>
+    );
+  }
+
+  if (!user) {
+    // While redirecting, show a blank page or spinner
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Spinner />
+      </div>
+    );
+  }
 
   const handleScanSuccess = () => {
-    // Refresh profile data after successful scan
-    refreshProfile();
+    // Handle scan success
   };
 
   return (
@@ -41,7 +59,6 @@ const Dashboard = () => {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">
-            {/* Changed: Use user properties directly */}
             Welcome back, {user.name || user.email || 'User'}!
           </h1>
           <p className="text-gray-600 mt-2">
@@ -56,8 +73,7 @@ const Dashboard = () => {
               <Scan className="h-8 w-8 text-blue-600" />
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Total Scans</p>
-                {/* Changed: Use user.total_scans instead of profile.total_scans */}
-                <p className="text-2xl font-bold text-gray-900">{user.total_scans}</p>
+                <p className="text-2xl font-bold text-gray-900">{user.total_scans || 0}</p>
               </div>
             </div>
           </div>
@@ -66,9 +82,8 @@ const Dashboard = () => {
               <TrendingUp className="h-8 w-8 text-green-600" />
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">CO2 Saved</p>
-                {/* Changed: Use user.co2_saved instead of profile.co2_saved */}
                 <p className="text-2xl font-bold text-gray-900">
-                  {user.co2_saved.toFixed(2)}kg
+                  {(user.co2_saved || 0).toFixed(2)}kg
                 </p>
               </div>
             </div>
@@ -78,8 +93,7 @@ const Dashboard = () => {
               <Award className="h-8 w-8 text-purple-600" />
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Points</p>
-                {/* Changed: Use user.points instead of profile.points */}
-                <p className="text-2xl font-bold text-gray-900">{user.points}</p>
+                <p className="text-2xl font-bold text-gray-900">{user.points || 0}</p>
               </div>
             </div>
           </div>
@@ -118,9 +132,7 @@ const Dashboard = () => {
           </div>
           
           <div className="p-6">
-            {activeTab === 'scan' && (
-              <WasteScanner onScanSuccess={handleScanSuccess} />
-            )}
+            {activeTab === 'scan' && <WasteScanner onScanSuccess={handleScanSuccess} />}
             {activeTab === 'history' && <ScanHistory />}
             {activeTab === 'stats' && <ImpactStats />}
             {activeTab === 'achievements' && <Achievements />}

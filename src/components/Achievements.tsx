@@ -4,55 +4,45 @@ import { useEffect, useState } from 'react';
 import { Loader2, Award as AwardIcon } from 'lucide-react';
 
 interface Achievement {
-  id: number;
+  id: string;
   name: string;
   description: string;
   icon: string;
   points_reward: number;
-}
-
-interface UserAchievement extends Achievement {
-  earned_at: string;
+  criteria: Record<string, unknown>;
+  created_at: string;
 }
 
 export default function Achievements() {
   const { user } = useAuth();
-  const [achievements, setAchievements] = useState<UserAchievement[]>([]);
-  const [allAchievements, setAllAchievements] = useState<Achievement[]>([]);
+  const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
     const fetchAchievements = async () => {
-      if (!user) return;
+      if (!user) {
+        setLoading(false);
+        return;
+      }
       
       try {
         setLoading(true);
+        setError('');
         
-        // Fetch user's earned achievements
-        const { data: userAchievements, error: userError } = await supabase
-          .from('user_achievements')
-          .select('achievement_id, earned_at, achievements(*)')
-          .eq('user_id', user.id);
-
-        if (userError) throw userError;
-
-        // Fetch all available achievements
-        const { data: allAchieves, error: allError } = await supabase
+        // Directly fetch from achievements table
+        const { data, error: fetchError } = await supabase
           .from('achievements')
-          .select('*');
+          .select('*')
+          .order('created_at', { ascending: false });
 
-        if (allError) throw allError;
+        if (fetchError) throw fetchError;
 
-        setAchievements(userAchievements?.map(ua => ({
-          ...ua.achievements,
-          earned_at: ua.earned_at
-        })) || []);
-        
-        setAllAchievements(allAchieves || []);
+        setAchievements(data || []);
       } catch (err) {
         console.error('Error fetching achievements:', err);
-        setError('Failed to load achievements');
+        setError(err instanceof Error ? err.message : 'Failed to load achievements');
+        setAchievements([]);
       } finally {
         setLoading(false);
       }
@@ -70,63 +60,59 @@ export default function Achievements() {
   }
 
   if (error) {
-    return <div className="text-red-500 text-center py-4">{error}</div>;
+    return (
+      <div className="text-red-500 text-center py-4">
+        {error}
+        {achievements.length > 0 && (
+          <p className="text-sm text-gray-500 mt-2">Showing available data</p>
+        )}
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-xl font-semibold">Your Achievements</h2>
+    <div className="space-y-8">
+      <h2 className="text-xl font-semibold">Available Achievements</h2>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {achievements.length > 0 ? (
-          achievements.map((achievement) => (
-            <div key={achievement.id} className="bg-white p-4 rounded-lg shadow flex items-start">
-              <div className="bg-yellow-100 p-3 rounded-full mr-4">
-                <AwardIcon className="h-6 w-6 text-yellow-600" />
-              </div>
-              <div>
-                <h3 className="font-medium">{achievement.name}</h3>
-                <p className="text-sm text-gray-600">{achievement.description}</p>
-                <p className="text-sm text-gray-500 mt-1">
-                  Earned on {new Date(achievement.earned_at).toLocaleDateString()} • +{achievement.points_reward} pts
-                </p>
-              </div>
-            </div>
-          ))
-        ) : (
-          <p className="text-gray-500">No achievements earned yet</p>
-        )}
-      </div>
-
-      <h3 className="text-lg font-medium mt-8">Available Achievements</h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {allAchievements.map((achievement) => {
-          const isEarned = achievements.some(a => a.id === achievement.id);
-          return (
+      {achievements.length === 0 ? (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 text-center">
+          <p className="text-blue-800">No achievements found</p>
+          <p className="text-sm text-blue-600 mt-1">
+            Check back later for available achievements
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {achievements.map((achievement) => (
             <div 
               key={achievement.id} 
-              className={`p-4 rounded-lg shadow flex items-start border ${
-                isEarned ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-white opacity-70'
-              }`}
+              className="bg-white p-4 rounded-lg shadow border border-green-200 flex items-start"
             >
-              <div className={`p-3 rounded-full mr-4 ${
-                isEarned ? 'bg-green-100' : 'bg-gray-100'
-              }`}>
-                <AwardIcon className={`h-6 w-6 ${
-                  isEarned ? 'text-green-600' : 'text-gray-400'
-                }`} />
+              <div className="bg-green-100 p-3 rounded-full mr-4">
+                {achievement.icon ? (
+                  <img 
+                    src={achievement.icon} 
+                    alt={achievement.name}
+                    className="h-6 w-6"
+                  />
+                ) : (
+                  <AwardIcon className="h-6 w-6 text-green-600" />
+                )}
               </div>
               <div>
                 <h3 className="font-medium">{achievement.name}</h3>
                 <p className="text-sm text-gray-600">{achievement.description}</p>
                 <p className="text-sm text-gray-500 mt-1">
-                  Reward: +{achievement.points_reward} pts • {isEarned ? 'Earned' : 'Not earned'}
+                  <span className="text-green-600 font-medium">+{achievement.points_reward} pts</span>
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Created: {new Date(achievement.created_at).toLocaleDateString()}
                 </p>
               </div>
             </div>
-          );
-        })}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

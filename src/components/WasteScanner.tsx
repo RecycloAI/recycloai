@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Camera, Upload, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
@@ -6,12 +6,7 @@ import { scanService } from '@/lib/scanService';
 import { useAuth } from '@/contexts/AuthContext';
 import { Camera as CameraComponent } from '@/components/Camera';
 import { Camera as CameraIcon } from 'lucide-react';
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-);
+import { supabase } from '@/lib/supabaseClient'; // Import from centralized location
 
 interface ScanResult {
   material: string;
@@ -21,6 +16,42 @@ interface ScanResult {
   binColor: string;
   recyclable: boolean;
 }
+
+// Move mock results outside component to prevent recreation on every render
+const MOCK_RESULTS: ScanResult[] = [
+  {
+    material: "Plastic Bottle",
+    category: "PET Plastic",
+    confidence: 97,
+    instructions: "Remove cap and label. Rinse thoroughly. Place in blue recycling bin.",
+    binColor: "Blue",
+    recyclable: true
+  },
+  {
+    material: "Aluminum Can",
+    category: "Aluminum",
+    confidence: 95,
+    instructions: "Rinse can to remove food residue. Place in blue recycling bin.",
+    binColor: "Blue", 
+    recyclable: true
+  },
+  {
+    material: "Pizza Box",
+    category: "Cardboard",
+    confidence: 89,
+    instructions: "Remove food scraps. If greasy, place in compost. If clean, recycle in blue bin.",
+    binColor: "Blue/Brown",
+    recyclable: true
+  },
+  {
+    material: "Glass Jar",
+    category: "Glass",
+    confidence: 98,
+    instructions: "Remove lid and rinse. Place in blue recycling bin.",
+    binColor: "Blue",
+    recyclable: true
+  }
+];
 
 export function WasteScanner() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -32,99 +63,28 @@ export function WasteScanner() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [showCamera, setShowCamera] = useState(false);
 
-  // Mock AI results
-  const mockResults: ScanResult[] = [
-    {
-      material: "Plastic Bottle",
-      category: "PET Plastic",
-      confidence: 97,
-      instructions: "Remove cap and label. Rinse thoroughly. Place in blue recycling bin.",
-      binColor: "Blue",
-      recyclable: true
-    },
-    {
-      material: "Aluminum Can",
-      category: "Aluminum",
-      confidence: 95,
-      instructions: "Rinse can to remove food residue. Place in blue recycling bin.",
-      binColor: "Blue", 
-      recyclable: true
-    },
-    {
-      material: "Pizza Box",
-      category: "Cardboard",
-      confidence: 89,
-      instructions: "Remove food scraps. If greasy, place in compost. If clean, recycle in blue bin.",
-      binColor: "Blue/Brown",
-      recyclable: true
-    },
-    {
-      material: "Glass Jar",
-      category: "Glass",
-      confidence: 98,
-      instructions: "Remove lid and rinse. Place in blue recycling bin.",
-      binColor: "Blue",
-      recyclable: true
-    }
-  ];
+  // Clean up object URLs when component unmounts
+  useEffect(() => {
+    return () => {
+      if (selectedImage) {
+        URL.revokeObjectURL(selectedImage);
+      }
+    };
+  }, [selectedImage]);
 
-  const handleUploadComplete = async (imagePath: string) => {
+  const handleCameraCapture = async (imageBlob: Blob) => {
     try {
-      // Get public URL of the uploaded image
-      const { data: { publicUrl } } = supabase.storage
-        .from('waste-images')
-        .getPublicUrl(imagePath);
-      
-      // Set the image for display
-      setSelectedImage(publicUrl);
-      
-      // Create a File object from the URL for analysis
-      const response = await fetch(publicUrl);
-      const blob = await response.blob();
-      const file = new File([blob], imagePath.split('/').pop() || 'captured.jpg', {
-        type: blob.type
-      });
+      const file = new File([imageBlob], 'capture.jpg', { type: 'image/jpeg' });
       setImageFile(file);
-      
+      setSelectedImage(URL.createObjectURL(imageBlob));
+      setShowCamera(false);
     } catch (error) {
-      console.error('Error handling camera image:', error);
+      console.error('Error handling camera capture:', error);
       toast({
-        title: "Image error",
+        title: "Camera error",
         description: "Could not process captured image",
         variant: "destructive",
       });
-    }
-  };
-
-  const handleClassify = async (imagePath: string) => {
-    try {
-      setIsScanning(true);
-      setScanResult(null);
-      
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('waste-images')
-        .getPublicUrl(imagePath);
-
-      // Call classification function
-      const classification = await classifyWasteImage(publicUrl);
-      
-      // Update UI with results
-      setScanResult(classification);
-      toast({
-        title: "Scan complete!",
-        description: `Identified as ${classification.material} with ${classification.confidence}% confidence.`,
-      });
-    } catch (error) {
-      console.error('Classification error:', error);
-      toast({
-        title: "Classification failed",
-        description: "Could not classify image. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsScanning(false);
-      setShowCamera(false);
     }
   };
 
@@ -142,7 +102,7 @@ export function WasteScanner() {
   };
 
   const scanImage = async () => {
-    if (!selectedImage || !imageFile) {
+    if (!imageFile) {
       toast({
         title: "No image selected",
         description: "Please upload an image first.",
@@ -163,32 +123,34 @@ export function WasteScanner() {
     setScanResult(null);
 
     try {
-      // Upload to Supabase (for file uploads)
-      const imageUrl = await scanService.uploadImage(imageFile, user.id);
-      if (!imageUrl) {
-        throw new Error("Upload failed");
-      }
-
-      // Simulate AI processing
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // Mock result
-      const randomResult = mockResults[Math.floor(Math.random() * mockResults.length)];
-      setScanResult(randomResult);
-
+      // First analyze the image
+      const result = await classifyWasteImage(imageFile);
+      setScanResult(result);
+      
+      // Only upload to Supabase if analysis succeeds
+      await scanService.uploadImage(imageFile, user.id);
+      
       toast({
         title: "Scan complete!",
-        description: `Identified as ${randomResult.material} with ${randomResult.confidence}% confidence.`,
+        description: `Identified as ${result.material} with ${result.confidence}% confidence.`,
       });
     } catch (error) {
+      console.error('Scan error:', error);
       toast({
-        title: "Upload failed",
-        description: "Could not upload image. Please try again.",
+        title: "Scan failed",
+        description: error instanceof Error ? error.message : "Could not process image",
         variant: "destructive",
       });
     } finally {
       setIsScanning(false);
     }
+  };
+
+  const resetScanner = () => {
+    setSelectedImage(null);
+    setScanResult(null);
+    setImageFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   return (
@@ -224,11 +186,7 @@ export function WasteScanner() {
               </Button>
               <Button 
                 variant="outline" 
-                onClick={() => {
-                  setSelectedImage(null);
-                  setScanResult(null);
-                  if (fileInputRef.current) fileInputRef.current.value = '';
-                }}
+                onClick={resetScanner}
                 disabled={isScanning}
               >
                 Clear
@@ -270,8 +228,7 @@ export function WasteScanner() {
       {/* Camera Modal */}
       {showCamera && (
         <CameraComponent 
-          onUploadComplete={handleUploadComplete}
-          onClassify={handleClassify}
+          onCapture={handleCameraCapture}
           onClose={() => setShowCamera(false)}
         />
       )}
@@ -320,20 +277,10 @@ export function WasteScanner() {
   );
 }
 
-async function classifyWasteImage(imageUrl: string): Promise<ScanResult> {
-  // Mock implementation - replace with actual API call
-  const mockResults = [
-    {
-      material: "Plastic Bottle",
-      category: "PET Plastic",
-      confidence: 97,
-      instructions: "Remove cap and label. Rinse thoroughly. Place in blue recycling bin.",
-      binColor: "Blue",
-      recyclable: true
-    },
-    // ... other mock results
-  ];
-  
+async function classifyWasteImage(imageFile: File): Promise<ScanResult> {
+  // Simulate API call delay
   await new Promise(resolve => setTimeout(resolve, 1000));
-  return mockResults[Math.floor(Math.random() * mockResults.length)];
+  
+  // Return random mock result
+  return MOCK_RESULTS[Math.floor(Math.random() * MOCK_RESULTS.length)];
 }
