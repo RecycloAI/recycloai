@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Navigation from '@/components/Navigation';
 import Footer from '@/components/Footer';
 import { useAuth } from '../contexts/AuthContext';
@@ -6,10 +7,14 @@ import PredictionUploader from '../components/PredictionUploader';
 import { Button } from '@/components/ui/button';
 import { Camera, TrendingUp, Award, History, User, Scan } from 'lucide-react';
 import Spinner from '@/components/Spinner';
-import LoginPrompt from '@/components/LoginPrompt';
+import ScanHistory from '@/components/ScanHistory';
+import ImpactStats from '@/components/ImpactStats';
+import Achievements from '@/components/Achievements';
+import UserProfile from '@/components/UserProfile';
 
 const Dashboard = () => {
-  const { user, isLoading } = useAuth();
+  const navigate = useNavigate();
+  const { user, rank, isLoading } = useAuth();
   const [activeTab, setActiveTab] = useState('scan');
 
   const tabs = [
@@ -20,9 +25,33 @@ const Dashboard = () => {
     { id: 'user', name: 'User', icon: <User className="h-5 w-5" /> },
   ];
 
-  if (isLoading) return <Spinner />;
-  if (!user) return <div style={{color: 'red', textAlign: 'center', marginTop: '2rem'}}>Could not load user profile. Please try again or contact support.</div>;
-  console.log('Dashboard user:', user);
+  useEffect(() => {
+    // Redirect immediately if not loading and no user
+    if (!isLoading && !user) {
+      navigate('/auth/signin');
+    }
+  }, [isLoading, user, navigate]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Spinner />
+      </div>
+    );
+  }
+
+  if (!user) {
+    // While redirecting, show a blank page or spinner
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Spinner />
+      </div>
+    );
+  }
+
+  const handleScanSuccess = () => {
+    // Handle scan success
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -30,9 +59,14 @@ const Dashboard = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Welcome back, {user?.name || user?.email || 'User'}!</h1>
-          <p className="text-gray-600 mt-2">Track your recycling impact and continue making a difference.</p>
+          <h1 className="text-3xl font-bold text-gray-900">
+            Welcome back, {user.name || user.email || 'User'}!
+          </h1>
+          <p className="text-gray-600 mt-2">
+            Track your recycling impact and continue making a difference.
+          </p>
         </div>
+
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <div className="bg-white rounded-lg shadow-sm p-6">
@@ -40,7 +74,7 @@ const Dashboard = () => {
               <Scan className="h-8 w-8 text-blue-600" />
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Total Scans</p>
-                <p className="text-2xl font-bold text-gray-900">{user?.total_scans ?? 0}</p>
+                <p className="text-2xl font-bold text-gray-900">{user.total_scans || 0}</p>
               </div>
             </div>
           </div>
@@ -49,7 +83,9 @@ const Dashboard = () => {
               <TrendingUp className="h-8 w-8 text-green-600" />
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">CO2 Saved</p>
-                <p className="text-2xl font-bold text-gray-900">{user?.co2_saved ?? 0}kg</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {(user.co2_saved || 0).toFixed(2)}kg
+                </p>
               </div>
             </div>
           </div>
@@ -58,7 +94,7 @@ const Dashboard = () => {
               <Award className="h-8 w-8 text-purple-600" />
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Points</p>
-                <p className="text-2xl font-bold text-gray-900">{user?.points ?? 0}</p>
+                <p className="text-2xl font-bold text-gray-900">{user.points || 0}</p>
               </div>
             </div>
           </div>
@@ -67,11 +103,14 @@ const Dashboard = () => {
               <User className="h-8 w-8 text-orange-600" />
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Rank</p>
-                <p className="text-2xl font-bold text-gray-900">#47</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {rank ? `#${rank}` : '--'}
+                </p>
               </div>
             </div>
           </div>
         </div>
+
         {/* Tabs */}
         <div className="bg-white rounded-lg shadow-sm">
           <div className="border-b border-gray-200">
@@ -92,6 +131,7 @@ const Dashboard = () => {
               ))}
             </nav>
           </div>
+          
           <div className="p-6">
             {activeTab === 'scan' && <PredictionUploader />}
             {/* You can add the other tab contents here as needed */}
