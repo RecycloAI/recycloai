@@ -2,7 +2,7 @@ import { useState } from 'react';
 import Navigation from '@/components/Navigation';
 import Footer from '@/components/Footer';
 import { useAuth } from '../contexts/AuthContext';
-import WasteScanner from '../components/WasteScanner';
+import PredictionUploader from '../components/PredictionUploader';
 import { Button } from '@/components/ui/button';
 import { Camera, TrendingUp, Award, History, User, Scan } from 'lucide-react';
 import Spinner from '@/components/Spinner';
@@ -93,7 +93,7 @@ const Dashboard = () => {
             </nav>
           </div>
           <div className="p-6">
-            {activeTab === 'scan' && <WasteScanner />}
+            {activeTab === 'scan' && <PredictionUploader />}
             {/* You can add the other tab contents here as needed */}
           </div>
         </div>
