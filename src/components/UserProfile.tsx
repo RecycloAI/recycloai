@@ -1,11 +1,12 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { useEffect, useState } from 'react';
-import { Loader2, UploadCloud, CheckCircle2, XCircle, Edit, Save, X } from 'lucide-react';
+import { Loader2, UploadCloud, CheckCircle2, XCircle, Edit, Save, X, Leaf, Scan, Award } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { Progress } from '@/components/ui/progress';
 
 interface ProfileData {
   id: string;
@@ -19,12 +20,14 @@ interface ProfileData {
   bio: string;
   avatar_url: string | null;
   location: string;
+  most_common_waste: string | null;
+  avg_co2_per_scan: number | null;
 }
 
 export default function UserProfile() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [profile, setProfile] = useState<ProfileData | null>(null);
-  const [formData, setFormData] = useState<Omit<ProfileData, 'id' | 'created_at' | 'updated_at' | 'total_scans' | 'co2_saved' | 'points'>>({
+  const [formData, setFormData] = useState<Omit<ProfileData, 'id' | 'created_at' | 'updated_at' | 'total_scans' | 'co2_saved' | 'points' | 'most_common_waste' | 'avg_co2_per_scan'>>({
     name: '',
     email: '',
     bio: '',
@@ -37,6 +40,7 @@ export default function UserProfile() {
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [isEditing, setIsEditing] = useState(false);
+  const [rank, setRank] = useState<number | null>(null);
 
   // Get the properly formatted avatar URL with cache busting
   const getAvatarUrl = (url: string | null) => {
@@ -49,7 +53,7 @@ export default function UserProfile() {
     return `${supabase.storage.from('avatars').getPublicUrl(url).data.publicUrl}?t=${new Date().getTime()}`;
   };
 
-  // Fetch profile data
+  // Fetch profile data and rank
   useEffect(() => {
     const fetchProfile = async () => {
       if (!user) {
@@ -61,6 +65,7 @@ export default function UserProfile() {
         setLoading(true);
         setError('');
 
+        // Fetch profile data
         const { data, error: fetchError } = await supabase
           .from('profiles')
           .select('*')
@@ -68,6 +73,12 @@ export default function UserProfile() {
           .single();
 
         if (fetchError) throw fetchError;
+
+        // Fetch user rank based on points
+        const { count } = await supabase
+          .from('profiles')
+          .select('*', { count: 'exact', head: true })
+          .gt('points', data.points || 0);
 
         setProfile(data);
         setFormData({
@@ -77,6 +88,7 @@ export default function UserProfile() {
           avatar_url: data.avatar_url,
           location: data.location || '',
         });
+        setRank(count ? count + 1 : null);
       } catch (err) {
         console.error('Error fetching profile:', err);
         setError('Failed to load profile data');
@@ -98,7 +110,7 @@ export default function UserProfile() {
 
     const file = e.target.files[0];
     const fileExt = file.name.split('.').pop();
-    const fileName = `${user.id}.${fileExt}`;
+    const fileName = `${user.id}-${Date.now()}.${fileExt}`;
     const filePath = `${fileName}`;
 
     try {
@@ -129,9 +141,8 @@ export default function UserProfile() {
         .from('avatars')
         .getPublicUrl(filePath);
 
-      // Update both form data and profile with the new URL
+      // Update form data with the new URL
       setFormData(prev => ({ ...prev, avatar_url: publicUrl }));
-      setProfile(prev => prev ? { ...prev, avatar_url: publicUrl } : null);
 
       // Update the profile in the database
       const { error: updateError } = await supabase
@@ -140,6 +151,9 @@ export default function UserProfile() {
         .eq('id', user.id);
 
       if (updateError) throw updateError;
+
+      // Refresh user data
+      await refreshUser();
 
       setSuccessMessage('Avatar updated successfully!');
       setTimeout(() => setSuccessMessage(''), 3000);
@@ -177,6 +191,7 @@ export default function UserProfile() {
 
       setProfile(data);
       setIsEditing(false);
+      await refreshUser();
       setSuccessMessage('Profile updated successfully!');
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err) {
@@ -211,6 +226,11 @@ export default function UserProfile() {
       </div>
     );
   }
+
+  // Calculate derived values
+  const memberSince = new Date(profile.created_at);
+  const daysAsMember = Math.floor((Date.now() - memberSince.getTime()) / (1000 * 60 * 60 * 24));
+  const scansPerDay = daysAsMember > 0 ? (profile.total_scans / daysAsMember).toFixed(1) : profile.total_scans;
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto p-4">
@@ -296,28 +316,60 @@ export default function UserProfile() {
           </div>
 
           <div className="space-y-2">
-            <Label>Your Stats</Label>
+            <Label>Your Impact</Label>
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-muted p-4 rounded-lg">
-                <p className="text-sm text-muted-foreground">Total Scans</p>
-                <p className="text-xl font-bold">{profile.total_scans}</p>
+                <div className="flex items-center gap-2">
+                  <Scan className="h-4 w-4 text-blue-500" />
+                  <p className="text-sm text-muted-foreground">Total Scans</p>
+                </div>
+                <p className="text-xl font-bold mt-1">{profile.total_scans}</p>
+                <p className="text-xs text-muted-foreground">{scansPerDay} per day</p>
               </div>
               <div className="bg-muted p-4 rounded-lg">
-                <p className="text-sm text-muted-foreground">CO₂ Saved</p>
-                <p className="text-xl font-bold">{profile.co2_saved.toFixed(2)} kg</p>
+                <div className="flex items-center gap-2">
+                  <Leaf className="h-4 w-4 text-green-500" />
+                  <p className="text-sm text-muted-foreground">CO₂ Saved</p>
+                </div>
+                <p className="text-xl font-bold mt-1">{profile.co2_saved.toFixed(2)} kg</p>
+                <p className="text-xs text-muted-foreground">
+                  {profile.avg_co2_per_scan ? `${profile.avg_co2_per_scan.toFixed(2)} kg/scan` : ''}
+                </p>
               </div>
               <div className="bg-muted p-4 rounded-lg">
-                <p className="text-sm text-muted-foreground">Points</p>
-                <p className="text-xl font-bold">{profile.points}</p>
+                <div className="flex items-center gap-2">
+                  <Award className="h-4 w-4 text-yellow-500" />
+                  <p className="text-sm text-muted-foreground">Points</p>
+                </div>
+                <p className="text-xl font-bold mt-1">{profile.points}</p>
+                <p className="text-xs text-muted-foreground">
+                  {rank ? `Rank #${rank}` : 'Unranked'}
+                </p>
               </div>
               <div className="bg-muted p-4 rounded-lg">
                 <p className="text-sm text-muted-foreground">Member Since</p>
-                <p className="text-xl font-bold">
-                  {new Date(profile.created_at).toLocaleDateString()}
+                <p className="text-xl font-bold mt-1">
+                  {memberSince.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {daysAsMember} days
                 </p>
               </div>
             </div>
           </div>
+
+          {profile.most_common_waste && (
+            <div className="bg-muted p-4 rounded-lg">
+              <p className="text-sm text-muted-foreground">Most Common Waste</p>
+              <p className="text-xl font-bold capitalize mt-1">
+                {profile.most_common_waste.replace(/_/g, ' ')}
+              </p>
+              <Progress 
+                value={75} // This could be dynamic based on actual percentage
+                className="h-2 mt-2 bg-gray-200"
+              />
+            </div>
+          )}
         </div>
 
         {/* Right Column - Display or Edit Form */}
@@ -331,16 +383,20 @@ export default function UserProfile() {
                 value={formData.email}
                 disabled
               />
+              <p className="text-xs text-muted-foreground">
+                Contact support to change your email address
+              </p>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="name">Name</Label>
+              <Label htmlFor="name">Display Name</Label>
               <Input
                 id="name"
                 name="name"
                 value={formData.name}
                 onChange={handleInputChange}
                 required
+                maxLength={50}
               />
             </div>
 
@@ -352,8 +408,13 @@ export default function UserProfile() {
                 rows={3}
                 value={formData.bio}
                 onChange={handleInputChange}
+                maxLength={200}
                 className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                placeholder="Tell us about yourself and your sustainability goals..."
               />
+              <p className="text-xs text-muted-foreground text-right">
+                {formData.bio.length}/200 characters
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -363,22 +424,38 @@ export default function UserProfile() {
                 name="location"
                 value={formData.location}
                 onChange={handleInputChange}
+                placeholder="City, Country"
+                maxLength={50}
               />
             </div>
 
-            <Button type="submit" disabled={saving} className="mt-4 bg-green-600 hover:bg-green-700">
-              {saving ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Save className="mr-2 h-4 w-4" />
-                  Save Changes
-                </>
-              )}
-            </Button>
+            <div className="flex justify-end gap-2">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={toggleEditMode}
+                disabled={saving}
+              >
+                Cancel
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={saving}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="mr-2 h-4 w-4" />
+                    Save Changes
+                  </>
+                )}
+              </Button>
+            </div>
           </form>
         ) : (
           <div className="space-y-6 flex-1">
@@ -388,13 +465,15 @@ export default function UserProfile() {
             </div>
 
             <div className="space-y-2">
-              <Label>Name</Label>
+              <Label>Display Name</Label>
               <p className="text-sm">{profile.name || 'Not specified'}</p>
             </div>
 
             <div className="space-y-2">
               <Label>Bio</Label>
-              <p className="text-sm whitespace-pre-line">{profile.bio || 'No bio provided'}</p>
+              <p className="text-sm whitespace-pre-line">
+                {profile.bio || 'No bio provided'}
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -403,10 +482,17 @@ export default function UserProfile() {
             </div>
 
             <div className="space-y-2">
-              <Label>Last Updated</Label>
-              <p className="text-sm">
-                {new Date(profile.updated_at).toLocaleString()}
-              </p>
+              <Label>Account Details</Label>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-muted-foreground">Member Since</p>
+                  <p>{memberSince.toLocaleDateString()}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Last Updated</p>
+                  <p>{new Date(profile.updated_at).toLocaleString()}</p>
+                </div>
+              </div>
             </div>
           </div>
         )}

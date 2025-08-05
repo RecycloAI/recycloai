@@ -5,7 +5,7 @@ import Footer from '@/components/Footer';
 import { useAuth } from '../contexts/AuthContext';
 import PredictionUploader from '../components/PredictionUploader';
 import { Button } from '@/components/ui/button';
-import { Camera, TrendingUp, Award, History, User, Scan } from 'lucide-react';
+import { Camera, TrendingUp, Award, History, User, Scan, Leaf } from 'lucide-react';
 import Spinner from '@/components/Spinner';
 import ScanHistory from '@/components/ScanHistory';
 import ImpactStats from '@/components/ImpactStats';
@@ -14,8 +14,9 @@ import UserProfile from '@/components/UserProfile';
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { user, rank, isLoading } = useAuth();
+  const { user, rank, isLoading, refreshUser } = useAuth();
   const [activeTab, setActiveTab] = useState('scan');
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const tabs = [
     { id: 'scan', name: 'Scan Waste', icon: <Camera className="h-5 w-5" /> },
@@ -26,12 +27,10 @@ const Dashboard = () => {
   ];
 
   useEffect(() => {
-    // Redirect immediately if not loading and no user
     if (!isLoading && !user) {
       navigate('/auth/signin');
     }
 
-    // Restore last active tab from localStorage
     const savedTab = localStorage.getItem('lastActiveTab');
     if (savedTab && tabs.some(tab => tab.id === savedTab)) {
       setActiveTab(savedTab);
@@ -39,11 +38,19 @@ const Dashboard = () => {
   }, [isLoading, user, navigate]);
 
   useEffect(() => {
-    // Save active tab to localStorage
     localStorage.setItem('lastActiveTab', activeTab);
   }, [activeTab]);
 
-  if (isLoading) {
+  const handleScanSuccess = async () => {
+    setIsRefreshing(true);
+    try {
+      await refreshUser();
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  if (isLoading || isRefreshing) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <Spinner />
@@ -59,10 +66,12 @@ const Dashboard = () => {
     );
   }
 
-  const handleScanSuccess = () => {
-    // Refresh data after successful scan
-    // You might want to trigger a refresh of user data here
-  };
+  // Calculate derived stats
+  const totalScans = user.total_scans || 0;
+  const co2Saved = user.co2_saved || 0;
+  const points = user.points || 0;
+  const avgCo2PerScan = totalScans > 0 ? (co2Saved / totalScans).toFixed(2) : 0;
+  const mostCommonWaste = user.most_common_waste || 'None';
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -75,7 +84,9 @@ const Dashboard = () => {
               Welcome back, {user.name || user.email || 'User'}!
             </h1>
             <p className="text-gray-600 mt-2">
-              Track your recycling impact and continue making a difference.
+              {totalScans > 0 
+                ? `You've prevented ${co2Saved}kg of CO₂ emissions! Keep it up!`
+                : 'Start scanning waste to track your environmental impact.'}
             </p>
           </div>
 
@@ -86,17 +97,17 @@ const Dashboard = () => {
                 <Scan className="h-8 w-8 text-blue-600" />
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Total Scans</p>
-                  <p className="text-2xl font-bold text-gray-900">{user.total_scans || 0}</p>
+                  <p className="text-2xl font-bold text-gray-900">{totalScans}</p>
                 </div>
               </div>
             </div>
             <div className="bg-white rounded-lg shadow-sm p-6">
               <div className="flex items-center">
-                <TrendingUp className="h-8 w-8 text-green-600" />
+                <Leaf className="h-8 w-8 text-green-600" />
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">CO2 Saved</p>
+                  <p className="text-sm font-medium text-gray-600">CO₂ Saved</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    {(user.co2_saved || 0).toFixed(2)}kg
+                    {co2Saved.toFixed(2)}kg
                   </p>
                 </div>
               </div>
@@ -106,7 +117,7 @@ const Dashboard = () => {
                 <Award className="h-8 w-8 text-purple-600" />
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Points</p>
-                  <p className="text-2xl font-bold text-gray-900">{user.points || 0}</p>
+                  <p className="text-2xl font-bold text-gray-900">{points}</p>
                 </div>
               </div>
             </div>
@@ -117,6 +128,32 @@ const Dashboard = () => {
                   <p className="text-sm font-medium text-gray-600">Rank</p>
                   <p className="text-2xl font-bold text-gray-900">
                     {rank ? `#${rank}` : '--'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Additional Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <div className="flex items-center">
+                <TrendingUp className="h-8 w-8 text-blue-500" />
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600">Avg CO₂ per Scan</p>
+                  <p className="text-xl font-bold text-gray-900">
+                    {avgCo2PerScan}kg
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <div className="flex items-center">
+                <Award className="h-8 w-8 text-green-500" />
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600">Most Common Waste</p>
+                  <p className="text-xl font-bold text-gray-900 capitalize">
+                    {mostCommonWaste.toLowerCase()}
                   </p>
                 </div>
               </div>
