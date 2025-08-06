@@ -9,7 +9,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8080"],  # Adjust if needed
+    allow_origins=["http://localhost:8080"],  # Adjust if your frontend is hosted elsewhere
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -19,22 +19,17 @@ app.add_middleware(
 model = torch.jit.load("app/model/best.torchscript")
 model.eval()
 
-# Define label to guideline mapping
+# Class index to label and disposal guideline
 LABEL_MAP = {
-    0: ("white-glass", "Recycle in the white glass bin."),
-    1: ("trash", "Dispose in the general waste bin."),
-    2: ("shoes", "Donate if wearable, otherwise dispose."),
-    3: ("plastic", "Recycle in the plastics bin."),
-    4: ("paper", "Recycle in the paper bin."),
-    5: ("metal", "Recycle in the metals bin."),
-    6: ("green-glass", "Recycle in the green glass bin."),
-    7: ("clothes", "Donate or recycle textiles."),
-    8: ("cardboard", "Recycle in the cardboard bin."),
-    9: ("brown-glass", "Recycle in the brown glass bin."),
-    10: ("biological", "Compost if possible."),
-    11: ("battery", "Take to a battery collection point."),
+    0: ("cardboard", "Recycle in the cardboard bin."),
+    1: ("glass", "Recycle in the glass bin."),
+    2: ("metal", "Recycle in the metals bin."),
+    3: ("paper", "Recycle in the paper bin."),
+    4: ("plastic", "Recycle in the plastics bin."),
+    5: ("trash", "Dispose in the general waste bin."),
 }
 
+# Preprocessing
 transform = transforms.Compose([
     transforms.Resize((224, 224)),
     transforms.ToTensor(),

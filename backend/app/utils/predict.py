@@ -1,18 +1,25 @@
+# model/predictor.py
+
 import torch
 from PIL import Image
-import io
+from torchvision import transforms
 
-MODEL_PATH = "app/model/best.torchscript"
-CLASSES = ["Organic", "Plastic", "Paper", "Metal", "Glass"]  # Update with your classes
+# Load the model once
+model = torch.jit.load("app/model/best.torchscript")
+model.eval()
 
-def load_model():
-    return torch.jit.load(MODEL_PATH, map_location="cpu")
+# Define transform
+transform = transforms.Compose([
+    transforms.Resize((224, 224)),
+    transforms.ToTensor(),
+])
 
-def predict_image(image_bytes):
-    model = load_model()
-    image = Image.open(io.BytesIO(image_bytes))
-    # Add your preprocessing here (resize/normalize)
-    tensor = torch.Tensor(image)  # Simplified - adjust for your model
-    outputs = model(tensor)
-    _, predicted = torch.max(outputs, 1)
-    return CLASSES[predicted.item()]
+# Waste type labels 
+labels = ['cardboard', 'glass', 'metal', 'paper', 'plastic', 'trash']
+
+def predict_image(image: Image.Image):
+    img_tensor = transform(image).unsqueeze(0)  # [1, 3, 224, 224]
+    with torch.no_grad():
+        outputs = model(img_tensor)
+        predicted_class = outputs.argmax(1).item()
+        return labels[predicted_class]

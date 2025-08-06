@@ -4,19 +4,14 @@ import { Camera } from '@/components/Camera';
 import { Camera as CameraIcon } from 'lucide-react';
 
 const LABEL_GUIDELINES: Record<string, string> = {
-  "white-glass": "Recycle in white-glass bin. Ensure it's clean.",
-  "trash": "Dispose in general waste. Not recyclable.",
-  "shoes": "Donate if usable. Otherwise dispose in trash.",
-  "plastic": "Recycle in plastics bin. Rinse before disposing.",
-  "paper": "Recycle in paper bin. Avoid soiled paper.",
-  "metal": "Recycle in metal bin. Rinse containers.",
-  "green-glass": "Recycle in green-glass bin. Clean it first.",
-  "clothes": "Donate if wearable. Otherwise dispose responsibly.",
-  "cardboard": "Flatten and recycle in cardboard bin.",
-  "brown-glass": "Recycle in brown-glass bin. Keep it clean.",
-  "biological": "Dispose in organic/biodegradable waste.",
-  "battery": "Take to e-waste/battery recycling station.",
+  "cardboard": "Flatten and recycle in the cardboard bin.",
+  "glass": "Recycle in the glass bin. Ensure it's clean.",
+  "metal": "Recycle in the metals bin. Rinse containers if needed.",
+  "paper": "Recycle in the paper bin. Avoid wet or soiled paper.",
+  "plastic": "Recycle in the plastics bin. Rinse before disposing.",
+  "trash": "Dispose in the general waste bin. Not recyclable.",
 };
+
 
 const API_BASE_URL = "http://127.0.0.1:8000";
 
