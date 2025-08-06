@@ -80,7 +80,7 @@ interface WasteScan {
   user_id: string;
   waste_type: string;
   image_url: string;
-  confidence: number;
+  confidence?: number;
   created_at: string;
   co2_saved: number;
   points_earned: number;
@@ -262,69 +262,111 @@ const PredictionUploader: React.FC = () => {
     setError("");
   }, []);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (!selectedFile) return;
+const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const selectedFile = e.target.files?.[0];
+  if (!selectedFile) return;
+
+  resetState();
+  setLoading(true);
+
+  try {
+    // Upload file to Supabase
+    const fileExt = selectedFile.name.split('.').pop();
+    const fileName = `${Date.now()}.${fileExt}`;
+    const filePath = `user-uploads/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('waste-images')
+      .upload(filePath, selectedFile);
+
+    if (uploadError) throw uploadError;
+
+    // Get public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from('waste-images')
+      .getPublicUrl(filePath);
 
     setFile(selectedFile);
+    setPreviewUrl(publicUrl);
+  } catch (err) {
+    setError("Failed to upload image");
+    console.error(err);
+  } finally {
+    setLoading(false);
+  }
+};
+
+const handleCameraUploadComplete = async (imagePath: string, imageData: string) => {
+  try {
+    // Use the imageData for immediate preview
+    setPreviewUrl(imageData);
+    
+    // Create a file object for consistency
+    const response = await fetch(imageData);
+    const blob = await response.blob();
+    const file = new File([blob], "camera-capture.jpg", { type: blob.type });
+    
+    setFile(file);
     resetState();
     
-    const url = URL.createObjectURL(selectedFile);
-    setPreviewUrl(url);
-  };
+    // The image is already uploaded to Supabase by the Camera component
+    // We can get the public URL if needed later
+    const publicUrl = `https://${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/waste-images/${imagePath}`;
+    // Store this URL if needed for future reference
+  } catch (err) {
+    setError("Failed to process camera image");
+    console.error(err);
+  } finally {
+    setShowCamera(false);
+  }
+};
 
-  const handleCameraUploadComplete = async (imagePath: string) => {
-    try {
-      const response = await fetch(
-        `https://${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/waste-images/${imagePath}`
-      );
-      
-      if (!response.ok) throw new Error("Failed to fetch captured image");
+const saveScanResult = async (result: Omit<WasteScan, 'id' | 'created_at'>) => {
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  
+  if (authError || !user) {
+    throw new Error("User not authenticated");
+  }
 
-      const blob = await response.blob();
-      const file = new File([blob], "camera-capture.jpg", { type: blob.type });
-      
-      setFile(file);
-      setPreviewUrl(URL.createObjectURL(blob));
-      resetState();
-    } catch (err) {
-      setError("Failed to process camera image");
-      console.error(err);
-    } finally {
-      setShowCamera(false);
-    }
-  };
+  try {
+    // First upsert the user impact stats
+    const { error: statsError } = await supabase
+      .from('user_impact_stats')
+      .upsert({
+        user_id: user.id,
+        total_scans: 1,
+        total_co2_saved: result.co2_saved,
+        total_points: result.points_earned,
+        last_scan_at: new Date().toISOString()
+      }, {
+        onConflict: 'user_id'
+      });
 
-  const saveScanResult = async (result: Omit<WasteScan, 'id' | 'created_at'>) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (statsError) throw statsError;
 
-    try {
-      // Save to waste_scans table (trigger will update user_impact_stats)
-      const { data: scanData, error } = await supabase
-        .from('waste_scans')
-        .insert([{
-          user_id: user.id,
-          waste_type: result.waste_type,
-          image_url: result.image_url,
-          confidence: result.confidence,
-          co2_saved: result.co2_saved,
-          points_earned: result.points_earned
-        }])
-        .select()
-        .single();
+    // Then insert the scan record
+    const { data: scanData, error: scanError } = await supabase
+      .from('waste_scans')
+      .insert([{
+        user_id: user.id,
+        waste_type: result.waste_type,
+        image_url: result.image_url,
+        confidence: result.confidence || 0.8,
+        co2_saved: result.co2_saved,
+        points_earned: result.points_earned
+      }])
+      .select()
+      .single();
 
-      if (error) throw error;
+    if (scanError) throw scanError;
 
-      // Refresh data
-      await fetchUserData();
-      return scanData;
-    } catch (err) {
-      console.error("Error saving scan result:", err);
-      throw err;
-    }
-  };
-
+    await fetchUserData();
+    return scanData;
+  } catch (err) {
+    console.error("Error saving scan result:", err);
+    throw err;
+  }
+};
   const calculateEnvironmentalImpact = (wasteType: string) => {
     const impactMap: Record<string, { co2: number; points: number }> = {
       "white-glass": { co2: 0.3, points: 5 },
@@ -344,85 +386,124 @@ const PredictionUploader: React.FC = () => {
     return impactMap[wasteType] || { co2: 0.2, points: 3 };
   };
 
-  const handleAnalyze = async () => {
-    if (!file) {
-      setError("Please upload an image first.");
-      return;
-    }
+const handleAnalyze = async () => {
+  if (!file) {
+    setError("Please upload an image first.");
+    return;
+  }
 
-    const formData = new FormData();
-    formData.append("file", file);
+  const formData = new FormData();
+  formData.append("file", file);
 
-    setLoading(true);
-    resetState();
+  setLoading(true);
+  resetState();
 
-    try {
-      // Step 1: Get prediction from ML model
-      const response = await axios.post(
-        `${API_BASE_URL}/predict`,
-        formData,
-        {
-          headers: {
-            "accept": "application/json",
-            "Content-Type": "multipart/form-data",
-          },
-          timeout: 10000,
-        }
-      );
-
-      const { predicted_label, confidence } = response.data;
-      setPredictedLabel(predicted_label);
-
-      // Step 2: Upload image to Supabase Storage
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Date.now()}.${fileExt}`;
-      const filePath = `user-uploads/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('waste-images')
-        .upload(filePath, file);
-
-      if (uploadError) throw uploadError;
-
-      // Step 3: Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('waste-images')
-        .getPublicUrl(filePath);
-
-      // Step 4: Calculate environmental impact
-      const { co2, points } = calculateEnvironmentalImpact(predicted_label);
-
-      // Step 5: Save all data to database
-      await saveScanResult({
-        user_id: (await supabase.auth.getUser()).data.user?.id || '',
-        waste_type: predicted_label,
-        image_url: publicUrl,
-        confidence: confidence,
-        co2_saved: co2,
-        points_earned: points
-      });
-
-    } catch (err: any) {
-      let errorMessage = "Error analyzing image";
-      
-      if (err.response) {
-        if (err.response.status === 422) {
-          errorMessage = "Invalid image format. Please try another image.";
-        } else {
-          errorMessage = err.response.data?.detail || `Server error: ${err.response.status}`;
-        }
-      } else if (err.code === "ECONNABORTED") {
-        errorMessage = "Request timed out. Please try again.";
-      } else if (err.message) {
-        errorMessage = err.message;
+  try {
+    // Step 1: Get prediction from ML model
+    const response = await axios.post(
+      `${API_BASE_URL}/predict`,
+      formData,
+      {
+        headers: {
+          "accept": "application/json",
+          "Content-Type": "multipart/form-data",
+        },
+        timeout: 10000,
       }
+    );
 
-      setError(errorMessage);
-      console.error("API Error:", err);
-    } finally {
-      setLoading(false);
+    const { predicted_label, confidence = 0.8 } = response.data; // Default confidence if missing
+    setPredictedLabel(predicted_label);
+
+    // Validate prediction result
+    if (!predicted_label) {
+      throw new Error("No prediction result returned from the API");
     }
-  };
+
+    // Step 2: Handle image upload to Supabase if needed
+    let publicUrl = previewUrl;
+    
+    if (previewUrl?.startsWith('blob:')) {
+      try {
+        const fileExt = file.name.split('.').pop() || 'jpg';
+        const fileName = `${Date.now()}.${fileExt}`;
+        const filePath = `user-uploads/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('waste-images')
+          .upload(filePath, file, {
+            contentType: file.type || 'image/jpeg',
+            upsert: false,
+          });
+
+        if (uploadError) throw uploadError;
+
+        // Get new public URL
+        const { data: { publicUrl: newPublicUrl } } = supabase.storage
+          .from('waste-images')
+          .getPublicUrl(filePath);
+        
+        publicUrl = newPublicUrl;
+        setPreviewUrl(newPublicUrl);
+      } catch (uploadErr) {
+        console.error("Upload error:", uploadErr);
+        throw new Error("Failed to upload image to storage");
+      }
+    }
+
+    // Step 3: Calculate environmental impact
+    const { co2, points } = calculateEnvironmentalImpact(predicted_label);
+
+    // Step 4: Save all data to database with validation
+    const user = (await supabase.auth.getUser()).data.user;
+    if (!user) {
+      throw new Error("User not authenticated");
+    }
+    await saveScanResult({
+      user_id: (await supabase.auth.getUser()).data.user?.id || '',
+      waste_type: predicted_label,
+      image_url: publicUrl,
+      confidence: Number(confidence) || 0.8, // Ensure it's a number with fallback
+      co2_saved: co2,
+      points_earned: points
+    });
+
+  } catch (err: any) {
+    let errorMessage = "Error analyzing image";
+    
+    if (err.response) {
+      // Handle API response errors
+      if (err.response.status === 422) {
+        errorMessage = "Invalid image format. Please try another image.";
+      } else if (err.response.status === 413) {
+        errorMessage = "Image file is too large. Please use a smaller image.";
+      } else {
+        errorMessage = err.response.data?.detail || `Server error (${err.response.status})`;
+      }
+    } else if (err.code === "ECONNABORTED") {
+      errorMessage = "Request timed out. Please try again.";
+    } else if (err.message.includes("Failed to upload")) {
+      errorMessage = "Failed to save image. Please try again.";
+    } else if (err.message) {
+      errorMessage = err.message;
+    }
+
+    setError(errorMessage);
+    console.error("Analysis error:", err);
+
+    if (err.message.includes("row-level security policy")) {
+      setError("Permission denied. Please make sure you're logged in properly.");
+    }
+    
+    // Reset preview if there was an upload error
+    if (err.message.includes("upload")) {
+      setPreviewUrl(null);
+      setFile(null);
+    }
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleReset = () => {
     setFile(null);
@@ -529,11 +610,16 @@ const PredictionUploader: React.FC = () => {
                 src={previewUrl} 
                 alt="Preview" 
                 className="w-full h-48 object-contain"
-                onLoad={() => URL.revokeObjectURL(previewUrl)}
+                onLoad={() => {
+                  // Only revoke object URLs (for camera data URLs), not Supabase URLs
+                  if (previewUrl.startsWith('blob:') || previewUrl.startsWith('data:')) {
+                    URL.revokeObjectURL(previewUrl);
+                  }
+                }}
               />
               <div className="p-3 bg-gray-50 flex justify-between items-center">
                 <span className="text-sm text-gray-600 truncate">
-                  {file?.name}
+                  {file?.name || "Camera Capture"}
                 </span>
                 <button 
                   onClick={handleReset}

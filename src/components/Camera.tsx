@@ -3,8 +3,9 @@ import { Camera as CameraIcon, Loader2 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import { Button } from '@/components/ui/button';
 
+// Update the interface
 interface CameraProps {
-  onUploadComplete: (imagePath: string) => void;
+  onUploadComplete: (imagePath: string, imageData: string) => void; // Added imageData
   onClose: () => void;
 }
 
@@ -109,15 +110,15 @@ export const Camera = ({ onUploadComplete, onClose }: CameraProps) => {
     }
   };
 
-  const handleUpload = async () => {
-    if (!capturedImage) return;
-    
-    const imagePath = await uploadImage(capturedImage);
-    if (imagePath) {
-      onUploadComplete(imagePath);
-      onClose();
-    }
-  };
+const handleUpload = async () => {
+  if (!capturedImage) return;
+  
+  const imagePath = await uploadImage(capturedImage);
+  if (imagePath) {
+    onUploadComplete(imagePath, capturedImage); // Pass both path and data URL
+    onClose();
+  }
+};
 
   const handleRetake = async () => {
     setCapturedImage(null);
