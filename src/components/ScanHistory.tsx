@@ -1,23 +1,27 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ImageIcon, ExternalLink } from 'lucide-react';
 
-interface Scan {
+interface WasteScan {
   id: string;
   user_id: string;
   waste_type: string;
   co2_saved: number;
   points_earned: number;
-  image_url: string | null;
+  image_url: string;
+  confidence: number;
   created_at: string;
 }
 
 export default function ScanHistory() {
   const { user } = useAuth();
-  const [scans, setScans] = useState<Scan[]>([]);
+  const [scans, setScans] = useState<WasteScan[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [hasMore, setHasMore] = useState(false);
+  const [page, setPage] = useState(1);
+  const itemsPerPage = 20;
 
   useEffect(() => {
     const fetchScanHistory = async () => {
@@ -30,16 +34,17 @@ export default function ScanHistory() {
         setLoading(true);
         setError('');
         
-        const { data, error: fetchError } = await supabase
-          .from('scans')
-          .select('*')
+        const { data, error: fetchError, count } = await supabase
+          .from('waste_scans')
+          .select('*', { count: 'exact' })
           .eq('user_id', user.id)
           .order('created_at', { ascending: false })
-          .limit(50);
+          .range((page - 1) * itemsPerPage, page * itemsPerPage - 1);
 
         if (fetchError) throw fetchError;
 
-        setScans(data || []);
+        setScans(prev => page === 1 ? data || [] : [...prev, ...(data || [])]);
+        setHasMore(count ? count > page * itemsPerPage : false);
       } catch (err) {
         console.error('Error fetching scan history:', err);
         setError(err.message || 'Failed to load scan history');
@@ -49,9 +54,13 @@ export default function ScanHistory() {
     };
 
     fetchScanHistory();
-  }, [user]);
+  }, [user, page]);
 
-  if (loading) {
+  const loadMore = () => {
+    setPage(prev => prev + 1);
+  };
+
+  if (loading && scans.length === 0) {
     return (
       <div className="flex justify-center items-center h-64">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -78,7 +87,7 @@ export default function ScanHistory() {
         <h2 className="text-xl font-semibold">Your Scan History</h2>
         <p className="text-gray-500">No scans recorded yet</p>
         <p className="text-sm text-gray-400">
-          Start scanning waste items to track your history
+          Start scanning waste items to track your environmental impact
         </p>
       </div>
     );
@@ -86,7 +95,12 @@ export default function ScanHistory() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-semibold">Your Recent Scans</h2>
+      <div className="flex justify-between items-center">
+        <h2 className="text-xl font-semibold">Your Scan History</h2>
+        <p className="text-sm text-gray-500">
+          {scans.length} scan{scans.length !== 1 ? 's' : ''}
+        </p>
+      </div>
       
       <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 rounded-lg">
         <table className="min-w-full divide-y divide-gray-300">
@@ -96,10 +110,13 @@ export default function ScanHistory() {
                 Date
               </th>
               <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                Type
+                Waste Type
               </th>
               <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                CO2 Saved
+                Confidence
+              </th>
+              <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                CO₂ Saved
               </th>
               <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
                 Points
@@ -125,24 +142,35 @@ export default function ScanHistory() {
                   {scan.waste_type.replace(/_/g, ' ')}
                 </td>
                 <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                  <div className="w-full bg-gray-200 rounded-full h-2.5">
+                    <div 
+                      className={`h-2.5 rounded-full ${
+                        scan.confidence > 0.8 ? 'bg-green-500' : 
+                        scan.confidence > 0.6 ? 'bg-yellow-500' : 'bg-red-500'
+                      }`} 
+                      style={{ width: `${scan.confidence * 100}%` }}
+                    ></div>
+                  </div>
+                  <span className="text-xs mt-1 inline-block">
+                    {(scan.confidence * 100).toFixed(1)}%
+                  </span>
+                </td>
+                <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
                   {scan.co2_saved.toFixed(2)} kg
                 </td>
                 <td className="whitespace-nowrap px-3 py-4 text-sm font-medium text-green-600">
                   +{scan.points_earned}
                 </td>
                 <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                  {scan.image_url ? (
-                    <a
-                      href={scan.image_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 hover:underline"
-                    >
-                      View
-                    </a>
-                  ) : (
-                    <span className="text-gray-400">None</span>
-                  )}
+                  <a
+                    href={scan.image_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center text-blue-600 hover:underline"
+                  >
+                    <ImageIcon className="h-4 w-4 mr-1" />
+                    View
+                  </a>
                 </td>
               </tr>
             ))}
@@ -150,11 +178,26 @@ export default function ScanHistory() {
         </table>
       </div>
       
-      {scans.length >= 50 && (
-        <p className="text-sm text-gray-500 text-center">
-          Showing most recent 50 scans
-        </p>
+      {loading && scans.length > 0 && (
+        <div className="flex justify-center">
+          <Loader2 className="h-6 w-6 animate-spin" />
+        </div>
       )}
+      
+      {hasMore && !loading && (
+        <div className="flex justify-center">
+          <button
+            onClick={loadMore}
+            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-md text-sm font-medium"
+          >
+            Load More
+          </button>
+        </div>
+      )}
+      
+      <div className="text-sm text-gray-500">
+        <p>Note: Only the most recent scans are shown. Each scan helps reduce your environmental impact.</p>
+      </div>
     </div>
   );
 }
