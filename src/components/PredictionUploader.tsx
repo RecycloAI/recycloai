@@ -1,79 +1,27 @@
 import React, { useState, useCallback, useEffect } from "react";
 import axios from "axios";
-import { Camera } from '@/components/Camera';
-import { Camera as CameraIcon, Recycle, MapPin, Info, X } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
-import dynamic from 'next/dynamic';
+import dynamic from "next/dynamic";
+import { Camera } from "@/components/Camera";
+import { Camera as CameraIcon, Recycle, MapPin, Info, X } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 // Dynamically import the Map components to avoid SSR issues
 const MapContainer = dynamic(
-  () => import('react-leaflet').then((mod) => mod.MapContainer),
+  () => import("react-leaflet").then((mod) => mod.MapContainer),
   { ssr: false }
 );
 const TileLayer = dynamic(
-  () => import('react-leaflet').then((mod) => mod.TileLayer),
+  () => import("react-leaflet").then((mod) => mod.TileLayer),
   { ssr: false }
 );
 const Marker = dynamic(
-  () => import('react-leaflet').then((mod) => mod.Marker),
+  () => import("react-leaflet").then((mod) => mod.Marker),
   { ssr: false }
 );
 const Popup = dynamic(
-  () => import('react-leaflet').then((mod) => mod.Popup),
+  () => import("react-leaflet").then((mod) => mod.Popup),
   { ssr: false }
 );
-
-// Extended guidelines with global disposal information
-const LABEL_GUIDELINES: Record<string, { instruction: string; globalTips: string }> = {
-  "white-glass": {
-    instruction: "Recycle in white-glass bin. Ensure it's clean.",
-    globalTips: "Check local recycling programs - white glass is widely recycled but sorting requirements vary by municipality."
-  },
-  "trash": {
-    instruction: "Dispose in general waste. Not recyclable.",
-    globalTips: "Consider waste-to-energy facilities where available. In some countries, non-recyclables are incinerated for energy."
-  },
-  "shoes": {
-    instruction: "Donate if usable. Otherwise dispose in trash.",
-    globalTips: "Many brands offer shoe recycling programs (Nike, Adidas, etc.). Textile recycling bins may accept shoes in some cities."
-  },
-  "plastic": {
-    instruction: "Recycle in plastics bin. Rinse before disposing.",
-    globalTips: "Look for resin codes (1-7) to determine recyclability. Many developing countries only accept PET (1) and HDPE (2)."
-  },
-  "paper": {
-    instruction: "Recycle in paper bin. Avoid soiled paper.",
-    globalTips: "Asian countries often have extensive paper recycling. In Europe, separate colored and white paper for better recycling."
-  },
-  "metal": {
-    instruction: "Recycle in metal bin. Rinse containers.",
-    globalTips: "Aluminum is universally valuable to recycle. In some African countries, informal sectors pay for metal waste."
-  },
-  "green-glass": {
-    instruction: "Recycle in green-glass bin. Clean it first.",
-    globalTips: "Some countries separate glass by color while others mix. Check local rules - colored glass has lower recycling value."
-  },
-  "clothes": {
-    instruction: "Donate if wearable. Otherwise dispose responsibly.",
-    globalTips: "H&M and other retailers offer global clothing take-back programs. Some cities have textile recycling points."
-  },
-  "cardboard": {
-    instruction: "Flatten and recycle in cardboard bin.",
-    globalTips: "Highly recyclable worldwide. In some countries, informal collectors will pick up cardboard from homes."
-  },
-  "brown-glass": {
-    instruction: "Recycle in brown-glass bin. Keep it clean.",
-    globalTips: "Commonly accepted but check local rules. Brown glass has good recycling value for new bottles."
-  },
-  "biological": {
-    instruction: "Dispose in organic/biodegradable waste.",
-    globalTips: "Many European cities have organic waste collection. In tropical areas, home composting is highly effective."
-  },
-  "battery": {
-    instruction: "Take to e-waste/battery recycling station.",
-    globalTips: "Most electronics stores accept batteries globally. IKEA and supermarkets often have collection points."
-  },
-};
 
 interface WasteScan {
   id?: number;
@@ -108,6 +56,129 @@ interface RecyclingPoint {
 
 const API_BASE_URL = "http://127.0.0.1:8000";
 
+const LABEL_GUIDELINES: Record<string, { instruction: string; globalTips: string }> = {
+  plastic: {
+    instruction: "Rinse and place in recycling bin if clean. Otherwise dispose as trash.",
+    globalTips: "Plastic bottles should be crushed to save space. Remove caps as they're often different plastic types."
+  },
+  paper: {
+    instruction: "Keep dry and place in paper recycling bin.",
+    globalTips: "Shredded paper should be composted or placed in a paper bag before recycling."
+  },
+  metal: {
+    instruction: "Rinse cans and place in metal recycling.",
+    globalTips: "Aluminum foil can be recycled if clean and balled up to golf-ball size."
+  },
+  glass: {
+    instruction: "Rinse and place in glass recycling bin.",
+    globalTips: "Broken glass should be wrapped and marked before disposal for safety."
+  },
+  cardboard: {
+    instruction: "Flatten boxes and place in cardboard recycling.",
+    globalTips: "Remove all tape and plastic film from cardboard before recycling."
+  },
+  trash: {
+    instruction: "Dispose in general waste bin.",
+    globalTips: "Consider if items could be repurposed or donated before trashing."
+  }
+};
+
+// Sample recycling centers data with focus on Kenya
+const recyclingCenters: RecyclingPoint[] = [
+  {
+    id: 1,
+    name: "TakaTaka Solutions",
+    address: "Mombasa Road, Nairobi, Kenya",
+    latitude: -1.3182,
+    longitude: 36.8172,
+    waste_types: ["plastic", "paper", "metal", "glass", "cardboard"],
+    phone: "+254 723 123456",
+    website: "https://takataka.co.ke"
+  },
+  {
+    id: 2,
+    name: "Mr. Green Africa",
+    address: "Enterprise Road, Nairobi, Kenya",
+    latitude: -1.2921,
+    longitude: 36.8219,
+    waste_types: ["plastic", "metal", "battery"],
+    phone: "+254 700 987654",
+    website: "https://mrgreenafrica.com"
+  },
+  {
+    id: 3,
+    name: "Sanergy",
+    address: "Mukuru, Nairobi, Kenya",
+    latitude: -1.3028,
+    longitude: 36.8766,
+    waste_types: ["biological", "organic"],
+    phone: "+254 733 456789"
+  },
+  {
+    id: 4,
+    name: "Gjenge Makers",
+    address: "Ngong Road, Nairobi, Kenya",
+    latitude: -1.3048,
+    longitude: 36.7810,
+    waste_types: ["plastic"],
+    website: "https://gengemakers.org"
+  },
+  {
+    id: 5,
+    name: "Kiteezi Recycling Center",
+    address: "Kampala, Uganda",
+    latitude: 0.3476,
+    longitude: 32.5825,
+    waste_types: ["plastic", "paper", "metal"],
+    phone: "+256 414 123456"
+  },
+  {
+    id: 6,
+    name: "Recycle Now Center",
+    address: "London, UK",
+    latitude: 51.5074,
+    longitude: -0.1278,
+    waste_types: ["glass", "paper", "cardboard", "metal"],
+    website: "https://recyclenow.com"
+  },
+  {
+    id: 7,
+    name: "Green Earth Recycling",
+    address: "New York, USA",
+    latitude: 40.7128,
+    longitude: -74.0060,
+    waste_types: ["plastic", "metal", "battery", "glass"],
+    phone: "+1 212 555 1234"
+  },
+  {
+    id: 8,
+    name: "EcoRecycle Melbourne",
+    address: "Melbourne, Australia",
+    latitude: -37.8136,
+    longitude: 144.9631,
+    waste_types: ["plastic", "paper", "glass", "cardboard"],
+    website: "https://ecorecycle.org.au"
+  },
+  {
+    id: 9,
+    name: "Green Africa Recycling",
+    address: "Lagos, Nigeria",
+    latitude: 6.5244,
+    longitude: 3.3792,
+    waste_types: ["plastic", "metal", "paper"],
+    phone: "+234 812 345 6789"
+  },
+  {
+    id: 10,
+    name: "Waste Ventures India",
+    address: "Mumbai, India",
+    latitude: 19.0760,
+    longitude: 72.8777,
+    waste_types: ["plastic", "paper", "metal", "glass"],
+    website: "https://wasteventuresindia.org"
+  }
+];
+
 const PredictionUploader: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [predictedLabel, setPredictedLabel] = useState("");
@@ -127,105 +198,6 @@ const PredictionUploader: React.FC = () => {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
 
-  // Sample recycling centers data with focus on Kenya
-  const recyclingCenters: RecyclingPoint[] = [
-    // Kenya
-    {
-      id: 1,
-      name: "TakaTaka Solutions",
-      address: "Mombasa Road, Nairobi, Kenya",
-      latitude: -1.3182,
-      longitude: 36.8172,
-      waste_types: ["plastic", "paper", "metal", "glass", "cardboard"],
-      phone: "+254 723 123456",
-      website: "https://takataka.co.ke"
-    },
-    {
-      id: 2,
-      name: "Mr. Green Africa",
-      address: "Enterprise Road, Nairobi, Kenya",
-      latitude: -1.2921,
-      longitude: 36.8219,
-      waste_types: ["plastic", "metal", "battery"],
-      phone: "+254 700 987654",
-      website: "https://mrgreenafrica.com"
-    },
-    {
-      id: 3,
-      name: "Sanergy",
-      address: "Mukuru, Nairobi, Kenya",
-      latitude: -1.3028,
-      longitude: 36.8766,
-      waste_types: ["biological", "organic"],
-      phone: "+254 733 456789"
-    },
-    {
-      id: 4,
-      name: "Gjenge Makers",
-      address: "Ngong Road, Nairobi, Kenya",
-      latitude: -1.3048,
-      longitude: 36.7810,
-      waste_types: ["plastic"],
-      website: "https://gengemakers.org"
-    },
-    {
-      id: 5,
-      name: "Kiteezi Recycling Center",
-      address: "Kampala, Uganda",
-      latitude: 0.3476,
-      longitude: 32.5825,
-      waste_types: ["plastic", "paper", "metal"],
-      phone: "+256 414 123456"
-    },
-    // Global centers
-    {
-      id: 6,
-      name: "Recycle Now Center",
-      address: "London, UK",
-      latitude: 51.5074,
-      longitude: -0.1278,
-      waste_types: ["glass", "paper", "cardboard", "metal"],
-      website: "https://recyclenow.com"
-    },
-    {
-      id: 7,
-      name: "Green Earth Recycling",
-      address: "New York, USA",
-      latitude: 40.7128,
-      longitude: -74.0060,
-      waste_types: ["plastic", "metal", "battery", "glass"],
-      phone: "+1 212 555 1234"
-    },
-    {
-      id: 8,
-      name: "EcoRecycle Melbourne",
-      address: "Melbourne, Australia",
-      latitude: -37.8136,
-      longitude: 144.9631,
-      waste_types: ["plastic", "paper", "glass", "cardboard"],
-      website: "https://ecorecycle.org.au"
-    },
-    {
-      id: 9,
-      name: "Green Africa Recycling",
-      address: "Lagos, Nigeria",
-      latitude: 6.5244,
-      longitude: 3.3792,
-      waste_types: ["plastic", "metal", "paper"],
-      phone: "+234 812 345 6789"
-    },
-    {
-      id: 10,
-      name: "Waste Ventures India",
-      address: "Mumbai, India",
-      latitude: 19.0760,
-      longitude: 72.8777,
-      waste_types: ["plastic", "paper", "metal", "glass"],
-      website: "https://wasteventuresindia.org"
-    }
-  ];
-
-  // Fetch user's scan history and stats
   const fetchUserData = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
@@ -262,314 +234,306 @@ const PredictionUploader: React.FC = () => {
     setError("");
   }, []);
 
-const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-  const selectedFile = e.target.files?.[0];
-  if (!selectedFile) return;
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (!selectedFile) return;
 
-  resetState();
-  setLoading(true);
+    resetState();
+    setLoading(true);
 
-  try {
-    // Create preview URL
-    const previewUrl = URL.createObjectURL(selectedFile);
-    setFile(selectedFile);
-    setPreviewUrl(previewUrl);
-  } catch (err) {
-    setError("Failed to process image");
-    console.error(err);
-  } finally {
-    setLoading(false);
-  }
-};
-const handleCameraUploadComplete = async (imagePath: string, imageData: string) => {
-  try {
-    // Create a file object from the data URL
-    const response = await fetch(imageData);
-    const blob = await response.blob();
-    const file = new File([blob], "camera-capture.jpg", { type: blob.type });
-    
-    // Set the file and preview
-    setFile(file);
-    setPreviewUrl(imageData);
-    
-    // The Camera component already uploaded the image to Supabase
-    const publicUrl = `https://${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/waste-images/${imagePath}`;
-    
-    // Call analyze with both the File object and the public URL
-    await handleAnalyze(file, publicUrl);
-    
-  } catch (err) {
-    setError("Failed to process camera image");
-    console.error(err);
-  } finally {
-    setShowCamera(false);
-  }
-};
+    try {
+      // Create preview URL
+      const previewUrl = URL.createObjectURL(selectedFile);
+      setFile(selectedFile);
+      setPreviewUrl(previewUrl);
+    } catch (err) {
+      setError("Failed to process image");
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  const handleCameraUploadComplete = async (imagePath: string, imageData: string) => {
+    try {
+      // Create a file object from the data URL
+      const response = await fetch(imageData);
+      const blob = await response.blob();
+      const file = new File([blob], "camera-capture.jpg", { type: blob.type });
+      
+      // Set the file and preview
+      setFile(file);
+      setPreviewUrl(imageData);
+      
+      // The Camera component already uploaded the image to Supabase
+      const publicUrl = `https://${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/waste-images/${imagePath}`;
+      
+      // Call analyze with both the File object and the public URL
+      await handleAnalyze(file, publicUrl);
+      
+    } catch (err) {
+      setError("Failed to process camera image");
+      console.error(err);
+    } finally {
+      setShowCamera(false);
+    }
+  };
 
-
-const saveScanResult = async (
-  result: Omit<WasteScan, 'id' | 'created_at'>,
-  options?: {
-    imageData?: string; // For when we need to upload
-    imagePublicUrl?: string // For when camera already uploaded
-  }
-) => {
-  // 1. Authentication Check
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) {
-    throw new Error("User not authenticated");
-  }
-
-  try {
-    // 2. Get Current Stats
-    const { data: currentStats } = await supabase
-      .from('user_impact_stats')
-      .select('*')
-      .eq('user_id', user.id)
-      .single();
-
-    // 3. Calculate New Values
-    const newTotalScans = (currentStats?.total_scans || 0) + 1;
-    const newTotalCo2 = (currentStats?.total_co2_saved || 0) + result.co2_saved;
-    const newTotalPoints = (currentStats?.total_points || 0) + result.points_earned;
-    const newAvgCo2 = newTotalCo2 / newTotalScans;
-
-    // 4. Update User Stats
-    const { error: statsError } = await supabase
-      .from('user_impact_stats')
-      .upsert({
-        user_id: user.id,
-        total_scans: newTotalScans,
-        total_co2_saved: newTotalCo2,
-        total_points: newTotalPoints,
-        avg_co2_per_scan: newAvgCo2,
-        last_updated: new Date().toISOString()
-      }, { onConflict: 'user_id' });
-
-    if (statsError) throw statsError;
-
-    // 5. Handle Image Upload (if needed)
-    let imageUrl = options?.imagePublicUrl || result.image_url;
-    
-    if (options?.imageData && !imageUrl) {
-      try {
-        const blob = await fetch(options.imageData).then(res => res.blob());
-        const filePath = `camera-uploads/${Date.now()}.jpg`;
-
-        const { error: uploadError } = await supabase.storage
-          .from('waste-images')
-          .upload(filePath, blob, {
-            contentType: 'image/jpeg',
-            upsert: false,
-          });
-
-        if (uploadError) throw uploadError;
-        
-        imageUrl = supabase.storage
-          .from('waste-images')
-          .getPublicUrl(filePath).data.publicUrl;
-      } catch (uploadErr) {
-        console.error("Image upload failed:", uploadErr);
-        throw new Error("Failed to upload image");
-      }
+  const saveScanResult = async (
+    result: Omit<WasteScan, 'id' | 'created_at'>,
+    options?: {
+      imageData?: string;
+      imagePublicUrl?: string;
+    }
+  ) => {
+    // 1. Authentication Check
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      throw new Error("User not authenticated");
     }
 
-    // 6. Save Scan Record
-    const { data: scanData, error: scanError } = await supabase
-      .from('waste_scans')
-      .insert({
-        user_id: user.id,
-        waste_type: result.waste_type,
-        image_url: imageUrl,
-        confidence: result.confidence || 0.8,
-        co2_saved: result.co2_saved,
-        points_earned: result.points_earned
-      })
-      .select()
-      .single();
+    try {
+      // 2. Get Current Stats
+      const { data: currentStats } = await supabase
+        .from('user_impact_stats')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
 
-    if (scanError) throw scanError;
+      // 3. Calculate New Values
+      const newTotalScans = (currentStats?.total_scans || 0) + 1;
+      const newTotalCo2 = (currentStats?.total_co2_saved || 0) + result.co2_saved;
+      const newTotalPoints = (currentStats?.total_points || 0) + result.points_earned;
+      const newAvgCo2 = newTotalCo2 / newTotalScans;
 
-    // 7. Update Derived Data
-    await updateMostCommonWaste(user.id);
-    await fetchUserData();
+      // 4. Update User Stats
+      const { error: statsError } = await supabase
+        .from('user_impact_stats')
+        .upsert({
+          user_id: user.id,
+          total_scans: newTotalScans,
+          total_co2_saved: newTotalCo2,
+          total_points: newTotalPoints,
+          avg_co2_per_scan: newAvgCo2,
+          last_updated: new Date().toISOString()
+        }, { onConflict: 'user_id' });
 
-    // 8. Return Complete Scan Data
-    return {
-      ...scanData,
-      // Ensure we always return the final image URL
-      image_url: imageUrl 
-    };
+      if (statsError) throw statsError;
 
-  } catch (err) {
-    console.error("Error in saveScanResult:", err);
-    throw err;
-  }
-};
+      // 5. Handle Image Upload (if needed)
+      let imageUrl = options?.imagePublicUrl || result.image_url;
+      
+      if (options?.imageData && !imageUrl) {
+        try {
+          const blob = await fetch(options.imageData).then(res => res.blob());
+          const filePath = `camera-uploads/${Date.now()}.jpg`;
 
-const updateMostCommonWaste = async (userId: string) => {
-  try {
-    // Fetch all scans for the user
-    const { data: scans, error } = await supabase
-      .from('waste_scans')
-      .select('waste_type')
-      .eq('user_id', userId);
+          const { error: uploadError } = await supabase.storage
+            .from('waste-images')
+            .upload(filePath, blob, {
+              contentType: 'image/jpeg',
+              upsert: false,
+            });
 
-    if (error) throw error;
-
-    if (scans && scans.length > 0) {
-      // Group client-side
-      const counts: Record<string, number> = {};
-      scans.forEach(scan => {
-        counts[scan.waste_type] = (counts[scan.waste_type] || 0) + 1;
-      });
-
-      // Find the most common waste type
-      const mostCommon = Object.entries(counts).reduce(
-        (acc, [wasteType, count]) => count > acc.count ? { wasteType, count } : acc,
-        { wasteType: '', count: 0 }
-      );
-
-      if (mostCommon.wasteType) {
-        await supabase
-          .from('user_impact_stats')
-          .update({ most_common_waste: mostCommon.wasteType })
-          .eq('user_id', userId);
+          if (uploadError) throw uploadError;
+          
+          imageUrl = supabase.storage
+            .from('waste-images')
+            .getPublicUrl(filePath).data.publicUrl;
+        } catch (uploadErr) {
+          console.error("Image upload failed:", uploadErr);
+          throw new Error("Failed to upload image");
+        }
       }
+
+      // 6. Save Scan Record
+      const { data: scanData, error: scanError } = await supabase
+        .from('waste_scans')
+        .insert({
+          user_id: user.id,
+          waste_type: result.waste_type,
+          image_url: imageUrl,
+          confidence: result.confidence || 0.8,
+          co2_saved: result.co2_saved,
+          points_earned: result.points_earned
+        })
+        .select()
+        .single();
+
+      if (scanError) throw scanError;
+
+      // 7. Update Derived Data
+      await updateMostCommonWaste(user.id);
+      await fetchUserData();
+
+      // 8. Return Complete Scan Data
+      return {
+        ...scanData,
+        image_url: imageUrl 
+      };
+
+    } catch (err) {
+      console.error("Error in saveScanResult:", err);
+      throw err;
     }
-  } catch (err) {
-    console.error("Error updating most common waste:", err);
-  }
-};
+  };
+
+  const updateMostCommonWaste = async (userId: string) => {
+    try {
+      // Fetch all scans for the user
+      const { data: scans, error } = await supabase
+        .from('waste_scans')
+        .select('waste_type')
+        .eq('user_id', userId);
+
+      if (error) throw error;
+
+      if (scans && scans.length > 0) {
+        // Group client-side
+        const counts: Record<string, number> = {};
+        scans.forEach(scan => {
+          counts[scan.waste_type] = (counts[scan.waste_type] || 0) + 1;
+        });
+
+        // Find the most common waste type
+        const mostCommon = Object.entries(counts).reduce(
+          (acc, [wasteType, count]) => count > acc.count ? { wasteType, count } : acc,
+          { wasteType: '', count: 0 }
+        );
+
+        if (mostCommon.wasteType) {
+          await supabase
+            .from('user_impact_stats')
+            .update({ most_common_waste: mostCommon.wasteType })
+            .eq('user_id', userId);
+        }
+      }
+    } catch (err) {
+      console.error("Error updating most common waste:", err);
+    }
+  };
 
   const calculateEnvironmentalImpact = (wasteType: string) => {
     const impactMap: Record<string, { co2: number; points: number }> = {
-      "white-glass": { co2: 0.3, points: 5 },
       "trash": { co2: 0, points: 0 },
       "plastic": { co2: 0.5, points: 8 },
       "paper": { co2: 0.4, points: 7 },
       "metal": { co2: 0.6, points: 10 },
-      "green-glass": { co2: 0.3, points: 5 },
-      "clothes": { co2: 0.2, points: 3 },
       "cardboard": { co2: 0.4, points: 7 },
-      "brown-glass": { co2: 0.3, points: 5 },
-      "biological": { co2: 0.1, points: 2 },
-      "battery": { co2: 0.7, points: 12 },
-      "shoes": { co2: 0.2, points: 3 }
+      "glass": { co2: 0.7, points: 12 },
     };
 
     return impactMap[wasteType] || { co2: 0.2, points: 3 };
   };
 
-const handleAnalyze = async (customFile?: File, customPublicUrl?: string) => {
-  const fileToUse = customFile || file;
-  const publicUrlToUse = customPublicUrl || previewUrl;
+  const handleAnalyze = async (customFile?: File, customPublicUrl?: string) => {
+    const fileToUse = customFile || file;
+    const publicUrlToUse = customPublicUrl || previewUrl;
 
-  if (!fileToUse) {
-    setError("Please upload an image first.");
-    return;
-  }
-
-  setLoading(true);
-  resetState();
-
-  try {
-    // Step 1: Prepare FormData
-    const formData = new FormData();
-    formData.append("file", fileToUse);
-
-    // Step 2: Send to prediction API
-    const response = await axios.post(
-      `${API_BASE_URL}/predict`,
-      formData,
-      {
-        headers: {
-          "accept": "application/json",
-          "Content-Type": "multipart/form-data",
-        },
-        timeout: 10000,
-      }
-    );
-
-    const { predicted_label, confidence = 0.8 } = response.data;
-    setPredictedLabel(predicted_label);
-
-    if (!predicted_label) {
-      throw new Error("No prediction result returned from the API");
+    if (!fileToUse) {
+      setError("Please upload an image first.");
+      return;
     }
 
-    // Step 3: Handle image URL
-    let finalPublicUrl = publicUrlToUse;
-    
-    // If we have a blob URL (from file input), we need to upload it
-    if (previewUrl?.startsWith('blob:')) {
-      const fileExt = fileToUse.name.split('.').pop() || 'jpg';
-      const fileName = `${Date.now()}.${fileExt}`;
-      const filePath = `user-uploads/${fileName}`;
+    setLoading(true);
+    resetState();
 
-      const { error: uploadError } = await supabase.storage
-        .from('waste-images')
-        .upload(filePath, fileToUse);
+    try {
+      // Step 1: Prepare FormData
+      const formData = new FormData();
+      formData.append("file", fileToUse);
 
-      if (uploadError) throw uploadError;
+      // Step 2: Send to prediction API
+      const response = await axios.post(
+        `${API_BASE_URL}/predict`,
+        formData,
+        {
+          headers: {
+            "accept": "application/json",
+            "Content-Type": "multipart/form-data",
+          },
+          timeout: 10000,
+        }
+      );
 
-      finalPublicUrl = supabase.storage
-        .from('waste-images')
-        .getPublicUrl(filePath).data.publicUrl;
+      const { predicted_label, confidence = 0.8 } = response.data;
+      setPredictedLabel(predicted_label);
+
+      if (!predicted_label) {
+        throw new Error("No prediction result returned from the API");
+      }
+
+      // Step 3: Handle image URL
+      let finalPublicUrl = publicUrlToUse;
       
-      setPreviewUrl(finalPublicUrl);
-    }
+      // If we have a blob URL (from file input), we need to upload it
+      if (previewUrl?.startsWith('blob:')) {
+        const fileExt = fileToUse.name.split('.').pop() || 'jpg';
+        const fileName = `${Date.now()}.${fileExt}`;
+        const filePath = `user-uploads/${fileName}`;
 
-    // Step 4: Save results
-    const { co2, points } = calculateEnvironmentalImpact(predicted_label);
-    const scanResult = await saveScanResult({
-      user_id: (await supabase.auth.getUser()).data.user?.id || '',
-      waste_type: predicted_label,
-      image_url: finalPublicUrl,
-      confidence: Number(confidence),
-      co2_saved: co2,
-      points_earned: points
-    });
+        const { error: uploadError } = await supabase.storage
+          .from('waste-images')
+          .upload(filePath, fileToUse);
 
-    // Update state
-    setScanResults(prev => [scanResult, ...prev]);
-    setUserStats(prev => ({
-      ...prev,
-      total_scans: prev.total_scans + 1,
-      total_co2_saved: prev.total_co2_saved + co2,
-      total_points: prev.total_points + points
-    }));
+        if (uploadError) throw uploadError;
 
-  } catch (err: any) {
-    let errorMessage = "Error analyzing image";
-    
-    if (err.response) {
-      if (err.response.status === 422) {
-        errorMessage = "Invalid image format. Please try a JPEG, PNG, or WEBP image.";
-      } else if (err.response.status === 413) {
-        errorMessage = "Image file is too large. Please use a smaller image.";
-      } else {
-        errorMessage = err.response.data?.detail || `Server error (${err.response.status})`;
+        finalPublicUrl = supabase.storage
+          .from('waste-images')
+          .getPublicUrl(filePath).data.publicUrl;
+        
+        setPreviewUrl(finalPublicUrl);
       }
-    } else if (err.code === "ECONNABORTED") {
-      errorMessage = "Request timed out. Please try again.";
-    } else if (err.message) {
-      errorMessage = err.message;
-    }
 
-    setError(errorMessage);
-    console.error("Analysis error:", err);
+      // Step 4: Save results
+      const { co2, points } = calculateEnvironmentalImpact(predicted_label);
+      const scanResult = await saveScanResult({
+        user_id: (await supabase.auth.getUser()).data.user?.id || '',
+        waste_type: predicted_label,
+        image_url: finalPublicUrl,
+        confidence: Number(confidence),
+        co2_saved: co2,
+        points_earned: points
+      });
 
-    // Reset state if it's not a camera capture
-    if (!customFile) {
-      setPreviewUrl(null);
-      setFile(null);
+      // Update state
+      setScanResults(prev => [scanResult, ...prev]);
+      setUserStats(prev => ({
+        ...prev,
+        total_scans: prev.total_scans + 1,
+        total_co2_saved: prev.total_co2_saved + co2,
+        total_points: prev.total_points + points
+      }));
+
+    } catch (err: any) {
+      let errorMessage = "Error analyzing image";
+      
+      if (err.response) {
+        if (err.response.status === 422) {
+          errorMessage = "Invalid image format. Please try a JPEG, PNG, or WEBP image.";
+        } else if (err.response.status === 413) {
+          errorMessage = "Image file is too large. Please use a smaller image.";
+        } else {
+          errorMessage = err.response.data?.detail || `Server error (${err.response.status})`;
+        }
+      } else if (err.code === "ECONNABORTED") {
+        errorMessage = "Request timed out. Please try again.";
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+
+      setError(errorMessage);
+      console.error("Analysis error:", err);
+
+      // Reset state if it's not a camera capture
+      if (!customFile) {
+        setPreviewUrl(null);
+        setFile(null);
+      }
+    } finally {
+      setLoading(false);
     }
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const handleReset = () => {
     setFile(null);
@@ -861,7 +825,8 @@ const handleAnalyze = async (customFile?: File, customPublicUrl?: string) => {
                       {/* Recycling points markers */}
                       {recyclingPoints.map((point) => (
                         <Marker 
-                          key={point.id}                           position={[point.latitude, point.longitude]}
+                          key={point.id}
+                          position={[point.latitude, point.longitude]}
                         >
                           <Popup>
                             <div className="space-y-1">
