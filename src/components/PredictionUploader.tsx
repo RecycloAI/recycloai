@@ -301,7 +301,7 @@ const PredictionUploader: React.FC = () => {
         .single();
 
       // 3. Calculate New Values
-      const newTotalScans = (currentStats?.total_scans || 0) + 1;
+      const newTotalScans = (currentStats?.total_scans || 0);
       const newTotalCo2 = (currentStats?.total_co2_saved || 0) + result.co2_saved;
       const newTotalPoints = (currentStats?.total_points || 0) + result.points_earned;
       const newAvgCo2 = newTotalCo2 / newTotalScans;
@@ -500,7 +500,7 @@ const PredictionUploader: React.FC = () => {
       setScanResults(prev => [scanResult, ...prev]);
       setUserStats(prev => ({
         ...prev,
-        total_scans: prev.total_scans + 1,
+        total_scans: prev.total_scans,
         total_co2_saved: prev.total_co2_saved + co2,
         total_points: prev.total_points + points
       }));

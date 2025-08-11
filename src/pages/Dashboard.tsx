@@ -1,22 +1,28 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '@/lib/supabase';
 import Navigation from '@/components/Navigation';
 import Footer from '@/components/Footer';
 import { useAuth } from '../contexts/AuthContext';
-import PredictionUploader from '../components/PredictionUploader';
 import { Button } from '@/components/ui/button';
 import { Camera, TrendingUp, Award, History, User, Scan, Leaf } from 'lucide-react';
 import Spinner from '@/components/Spinner';
-import ScanHistory from '@/components/ScanHistory';
-import ImpactStats from '@/components/ImpactStats';
-import Achievements from '@/components/Achievements';
-import UserProfile from '@/components/UserProfile';
+
+// Lazy load heavy components with fallback
+const PredictionUploader = lazy(() => import('../components/PredictionUploader'));
+const ScanHistory = lazy(() => import('@/components/ScanHistory'));
+const ImpactStats = lazy(() => import('@/components/ImpactStats'));
+const Achievements = lazy(() => import('@/components/Achievements'));
+const UserProfile = lazy(() => import('@/components/UserProfile'));
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { user, rank, isLoading, refreshUser } = useAuth();
+  const { user, isLoading, refreshUser } = useAuth();
   const [activeTab, setActiveTab] = useState('scan');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [userImpact, setUserImpact] = useState(null);
+  const [rank, setRank] = useState(null);
+  const [isDataLoading, setIsDataLoading] = useState(true);
 
   const tabs = [
     { id: 'scan', name: 'Scan Waste', icon: <Camera className="h-5 w-5" /> },
@@ -25,6 +31,35 @@ const Dashboard = () => {
     { id: 'achievements', name: 'Achievements', icon: <Award className="h-5 w-5" /> },
     { id: 'user', name: 'User Profile', icon: <User className="h-5 w-5" /> },
   ];
+
+  useEffect(() => {
+    const fetchUserImpactAndRank = async () => {
+      if (!user?.id) return;
+      
+      setIsDataLoading(true);
+      try {
+        // Fetch all data in parallel for better performance
+        const [impactResponse, rankResponse] = await Promise.all([
+          supabase
+            .from('user_impact_stats')
+            .select('*')
+            .eq('user_id', user.id)
+            .single(),
+          supabase
+            .rpc('get_user_rank', { user_id: user.id })
+        ]);
+
+        setUserImpact(impactResponse.data);
+        setRank(rankResponse.data);
+      } catch (error) {
+        console.error('Error fetching user impact or rank:', error);
+      } finally {
+        setIsDataLoading(false);
+      }
+    };
+
+    fetchUserImpactAndRank();
+  }, [user]);
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -41,37 +76,69 @@ const Dashboard = () => {
     localStorage.setItem('lastActiveTab', activeTab);
   }, [activeTab]);
 
-  const handleScanSuccess = async () => {
-    setIsRefreshing(true);
-    try {
-      await refreshUser();
-    } finally {
-      setIsRefreshing(false);
+// Update the handleScanSuccess function
+const handleScanSuccess = async () => {
+  setIsRefreshing(true);
+  try {
+    // Refresh all necessary data in parallel
+    const [userData, impactData, rankData] = await Promise.all([
+      refreshUser(),
+      supabase
+        .from('user_impact_stats')
+        .select('*')
+        .eq('user_id', user.id)
+        .single(),
+      supabase.rpc('get_user_rank', { user_id: user.id })
+    ]);
+
+    setUserImpact(impactData.data);
+    setRank(rankData.data);
+  } catch (error) {
+    console.error('Error refreshing data:', error);
+  } finally {
+    setIsRefreshing(false);
+  }
+};
+
+  if (isLoading || isRefreshing || !user) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Spinner />
+      </div>
+    );
+  }
+
+  // Calculate derived stats - prioritize user_impact_stats if available
+  const totalScans = userImpact?.total_scans || user.total_scans || 0;
+  const co2Saved = userImpact?.total_co2_saved || user.co2_saved || 0;
+  const points = userImpact?.total_points || user.points || 0;
+  const avgCo2PerScan = totalScans > 0 ? (co2Saved / totalScans).toFixed(2) : 0;
+  const mostCommonWaste = userImpact?.most_common_waste || 'None';
+
+  const renderTabContent = () => {
+    if (isDataLoading) {
+      return (
+        <div className="flex justify-center items-center h-64">
+          <Spinner />
+        </div>
+      );
+    }
+
+    switch (activeTab) {
+      case 'scan':
+        return <PredictionUploader onSuccess={handleScanSuccess} />;
+      case 'history':
+        return <ScanHistory userId={user.id} />;
+      case 'stats':
+        return <ImpactStats userId={user.id} />;
+      case 'achievements':
+        return <Achievements userId={user.id} />;
+      case 'user':
+        return <UserProfile user={user} />;
+      default:
+        return <PredictionUploader onSuccess={handleScanSuccess} />;
     }
   };
-
-  if (isLoading || isRefreshing) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Spinner />
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Spinner />
-      </div>
-    );
-  }
-
-  // Calculate derived stats
-  const totalScans = user.total_scans || 0;
-  const co2Saved = user.co2_saved || 0;
-  const points = user.points || 0;
-  const avgCo2PerScan = totalScans > 0 ? (co2Saved / totalScans).toFixed(2) : 0;
-  const mostCommonWaste = user.most_common_waste || 'None';
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -85,7 +152,7 @@ const Dashboard = () => {
             </h1>
             <p className="text-gray-600 mt-2">
               {totalScans > 0 
-                ? `You've prevented ${co2Saved}kg of CO₂ emissions! Keep it up!`
+                ? `You've prevented ${co2Saved.toFixed(2)}kg of CO₂ emissions! Keep it up!`
                 : 'Start scanning waste to track your environmental impact.'}
             </p>
           </div>
@@ -182,11 +249,13 @@ const Dashboard = () => {
             </div>
             
             <div className="p-6">
-              {activeTab === 'scan' && <PredictionUploader onSuccess={handleScanSuccess} />}
-              {activeTab === 'history' && <ScanHistory userId={user.id} />}
-              {activeTab === 'stats' && <ImpactStats userId={user.id} />}
-              {activeTab === 'achievements' && <Achievements userId={user.id} />}
-              {activeTab === 'user' && <UserProfile user={user} />}
+              <Suspense fallback={
+                <div className="flex justify-center items-center h-64">
+                  <Spinner />
+                </div>
+              }>
+                {renderTabContent()}
+              </Suspense>
             </div>
           </div>
         </div>

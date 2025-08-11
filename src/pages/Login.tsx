@@ -7,7 +7,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import Navigation from '@/components/Navigation';
 import { Recycle, Eye, EyeOff } from 'lucide-react';
-import { supabase } from '../lib/supabase';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -24,22 +23,24 @@ const Login = () => {
 
     try {
       const result = await login(email, password);
-      console.log("Login result:", result);
-      if (result.success) {
-        console.log("Navigating to dashboard...");
+      
+      if (result?.success) {
         toast({
           title: "Welcome back!",
           description: "You have successfully logged in.",
         });
+        // Preload dashboard components while showing toast
+        await import('@/pages/Dashboard');
         navigate('/dashboard');
       } else {
         toast({
           title: "Login failed",
-          description: result.error || "Invalid email or password. Please try again.",
+          description: result?.error || "Invalid email or password. Please try again.",
           variant: "destructive",
         });
       }
     } catch (error) {
+      console.error("Login error:", error);
       toast({
         title: "Error",
         description: "An unexpected error occurred. Please try again.",
@@ -118,9 +119,9 @@ const Login = () => {
 
               <div className="flex items-center justify-between">
                 <div className="text-sm">
-                  <a href="#" className="font-medium text-green-600 hover:text-green-500">
+                  <Link to="/forgot-password" className="font-medium text-green-600 hover:text-green-500">
                     Forgot your password?
-                  </a>
+                  </Link>
                 </div>
               </div>
 
@@ -129,6 +130,7 @@ const Login = () => {
                   type="submit"
                   className="w-full bg-green-600 hover:bg-green-700"
                   disabled={isLoading}
+                  onMouseEnter={() => import('@/pages/Dashboard')} // Preload on hover
                 >
                   {isLoading ? 'Signing in...' : 'Sign in'}
                 </Button>
