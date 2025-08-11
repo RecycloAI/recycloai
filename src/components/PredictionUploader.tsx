@@ -616,13 +616,13 @@ const PredictionUploader: React.FC = () => {
         
         <div className="flex flex-col gap-4 mb-6">
           <div className="flex gap-3">
-            <button
+            {/* <button
               onClick={() => setShowCamera(true)}
               className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
             >
               <CameraIcon className="h-5 w-5" />
               Use Camera
-            </button>
+            </button> */}
             <label className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 cursor-pointer">
               <span>Upload File</span>
               <input
