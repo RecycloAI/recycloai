@@ -9,7 +9,7 @@ interface UserRecord {
   role: 'user' | 'admin';
   total_scans: number;
   co2_saved: number;
-  points: number;
+  points: number;f
 }
 
 interface AuthContextType {

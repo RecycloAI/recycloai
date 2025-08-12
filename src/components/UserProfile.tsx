@@ -25,7 +25,7 @@ interface ProfileData {
 }
 
 export default function UserProfile() {
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser = async () => {} } = useAuth(); // Provide default function if not available
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [formData, setFormData] = useState<Omit<ProfileData, 'id' | 'created_at' | 'updated_at' | 'total_scans' | 'co2_saved' | 'points' | 'most_common_waste' | 'avg_co2_per_scan'>>({
     name: '',
@@ -40,6 +40,7 @@ export default function UserProfile() {
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [isEditing, setIsEditing] = useState(false);
+  const [isNewUser, setIsNewUser] = useState(false);
   const [rank, setRank] = useState<number | null>(null);
 
   // Get the properly formatted avatar URL with cache busting
@@ -72,7 +73,22 @@ export default function UserProfile() {
           .eq('id', user.id)
           .single();
 
-        if (fetchError) throw fetchError;
+        if (fetchError && fetchError.code !== 'PGRST116') throw fetchError;
+
+        // If no profile exists, this is a new user
+        if (!data) {
+          setIsNewUser(true);
+          setIsEditing(true);
+          setFormData({
+            name: '',
+            email: user.email || '',
+            bio: '',
+            avatar_url: null,
+            location: '',
+          });
+          setLoading(false);
+          return;
+        }
 
         // Fetch user rank based on points
         const { count } = await supabase
@@ -81,6 +97,7 @@ export default function UserProfile() {
           .gt('points', data.points || 0);
 
         setProfile(data);
+        setIsNewUser(false);
         setFormData({
           name: data.name || '',
           email: data.email || user.email || '',
@@ -144,17 +161,6 @@ export default function UserProfile() {
       // Update form data with the new URL
       setFormData(prev => ({ ...prev, avatar_url: publicUrl }));
 
-      // Update the profile in the database
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ avatar_url: publicUrl })
-        .eq('id', user.id);
-
-      if (updateError) throw updateError;
-
-      // Refresh user data
-      await refreshUser();
-
       setSuccessMessage('Avatar updated successfully!');
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err) {
@@ -174,29 +180,73 @@ export default function UserProfile() {
       setError('');
       setSuccessMessage('');
 
-      const { data, error: updateError } = await supabase
-        .from('profiles')
-        .update({
-          name: formData.name,
-          bio: formData.bio,
-          location: formData.location,
-          avatar_url: formData.avatar_url,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', user.id)
-        .select()
-        .single();
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.email)) {
+        throw new Error('Please enter a valid email address');
+      }
 
-      if (updateError) throw updateError;
+      if (isNewUser) {
+        // Create new profile for new user
+        const { data, error: createError } = await supabase
+          .from('profiles')
+          .insert({
+            id: user.id,
+            name: formData.name,
+            email: formData.email,
+            bio: formData.bio,
+            location: formData.location,
+            avatar_url: formData.avatar_url,
+            total_scans: 0,
+            co2_saved: 0,
+            points: 0,
+          })
+          .select()
+          .single();
 
-      setProfile(data);
+        if (createError) throw createError;
+
+        setProfile(data);
+        setIsNewUser(false);
+      } else {
+        // Update existing profile
+        const { data, error: updateError } = await supabase
+          .from('profiles')
+          .update({
+            name: formData.name,
+            email: formData.email,
+            bio: formData.bio,
+            location: formData.location,
+            avatar_url: formData.avatar_url,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', user.id)
+          .select()
+          .single();
+
+        if (updateError) throw updateError;
+
+        setProfile(data);
+      }
+
+      // Update auth email if it's changed
+      if (formData.email !== user.email) {
+        const { error: emailError } = await supabase.auth.updateUser({
+          email: formData.email,
+        });
+
+        if (emailError) throw emailError;
+      }
+
       setIsEditing(false);
-      await refreshUser();
-      setSuccessMessage('Profile updated successfully!');
+      if (refreshUser) {
+        await refreshUser();
+      }
+      setSuccessMessage(isNewUser ? 'Profile created successfully!' : 'Profile updated successfully!');
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err) {
-      console.error('Error updating profile:', err);
-      setError('Failed to update profile');
+      console.error('Error saving profile:', err);
+      setError(err instanceof Error ? err.message : 'Failed to save profile');
     } finally {
       setSaving(false);
     }
@@ -212,6 +262,158 @@ export default function UserProfile() {
     return (
       <div className="flex justify-center items-center h-64">
         <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="text-center py-8 space-y-4">
+        <h2 className="text-xl font-semibold">Your Profile</h2>
+        <p className="text-gray-500">Please sign in to view your profile</p>
+      </div>
+    );
+  }
+
+  // For new users, show the edit form immediately
+  if (isNewUser) {
+    return (
+      <div className="space-y-6 max-w-4xl mx-auto p-4">
+        <div className="flex justify-between items-center">
+          <h2 className="text-2xl font-bold">Complete Your Profile</h2>
+        </div>
+        
+        {error && (
+          <div className="p-4 rounded-md bg-red-50 text-red-800">
+            <div className="flex items-center gap-2">
+              <XCircle className="h-5 w-5" />
+              <p>{error}</p>
+            </div>
+          </div>
+        )}
+        
+        <form onSubmit={handleSubmit} className="flex flex-col md:flex-row gap-8">
+          {/* Left Column - Avatar */}
+          <div className="space-y-4 w-full md:w-1/3">
+            <div className="space-y-2">
+              <Label>Profile Picture</Label>
+              <div className="flex flex-col items-center gap-4">
+                <Avatar className="h-32 w-32">
+                  <AvatarImage 
+                    src={getAvatarUrl(formData.avatar_url) || undefined}
+                    alt="Profile picture"
+                    className="object-cover w-full h-full"
+                  />
+                  <AvatarFallback className="bg-gray-200 text-gray-600 text-4xl font-medium">
+                    {formData.name?.charAt(0) || user?.email?.charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                
+                <div className="relative">
+                  <Button asChild variant="outline" disabled={uploading}>
+                    <Label htmlFor="avatar-upload" className="cursor-pointer">
+                      {uploading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <UploadCloud className="mr-2 h-4 w-4" />
+                          Add Avatar
+                        </>
+                      )}
+                    </Label>
+                  </Button>
+                  <Input
+                    id="avatar-upload"
+                    type="file"
+                    accept="image/*"
+                    className="sr-only"
+                    onChange={handleAvatarUpload}
+                    disabled={uploading}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column - Form */}
+          <div className="space-y-6 flex-1">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleInputChange}
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="name">Display Name</Label>
+              <Input
+                id="name"
+                name="name"
+                value={formData.name}
+                onChange={handleInputChange}
+                required
+                maxLength={50}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="bio">Bio</Label>
+              <textarea
+                id="bio"
+                name="bio"
+                rows={3}
+                value={formData.bio}
+                onChange={handleInputChange}
+                maxLength={200}
+                className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                placeholder="Tell us about yourself and your sustainability goals..."
+              />
+              <p className="text-xs text-muted-foreground text-right">
+                {formData.bio.length}/200 characters
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="location">Location</Label>
+              <Input
+                id="location"
+                name="location"
+                value={formData.location}
+                onChange={handleInputChange}
+                placeholder="City, Country"
+                maxLength={50}
+              />
+            </div>
+
+            <div className="flex justify-end">
+              <Button 
+                type="submit" 
+                disabled={saving}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Creating Profile...
+                  </>
+                ) : (
+                  <>
+                    <Save className="mr-2 h-4 w-4" />
+                    Complete Profile
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </form>
       </div>
     );
   }
@@ -380,12 +582,11 @@ export default function UserProfile() {
               <Input
                 id="email"
                 type="email"
+                name="email"
                 value={formData.email}
-                disabled
+                onChange={handleInputChange}
+                required
               />
-              <p className="text-xs text-muted-foreground">
-                Contact support to change your email address
-              </p>
             </div>
 
             <div className="space-y-2">

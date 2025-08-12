@@ -83,7 +83,7 @@ export default function Achievements() {
         setAchievements(formattedAchievements);
       } catch (err) {
         console.error('Error fetching achievements:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load achievements');
+        setError(err instanceof Error ? err.message : 'No scans recorded yet');
         setAchievements([]);
       } finally {
         setLoading(false);
