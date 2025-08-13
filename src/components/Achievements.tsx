@@ -1,7 +1,7 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { useEffect, useState } from 'react';
-import { Loader2, Award as AwardIcon, CheckCircle } from 'lucide-react';
+import { Loader2, Award as AwardIcon, CheckCircle, Lock } from 'lucide-react';
 
 interface AchievementDefinition {
   id: number;
@@ -13,7 +13,7 @@ interface AchievementDefinition {
 }
 
 interface UserAchievement {
-  id: number;
+  id?: number;
   achievement_id: number;
   unlocked: boolean;
   unlocked_at: string | null;
@@ -27,9 +27,10 @@ export default function Achievements() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [totalPoints, setTotalPoints] = useState(0);
+  const [allDefinitions, setAllDefinitions] = useState<AchievementDefinition[]>([]);
 
   useEffect(() => {
-    const fetchAchievements = async () => {
+    const fetchData = async () => {
       if (!user) {
         setLoading(false);
         return;
@@ -49,6 +50,15 @@ export default function Achievements() {
         if (statsError) throw statsError;
         setTotalPoints(statsData?.total_points || 0);
 
+        // Fetch all achievement definitions
+        const { data: definitions, error: defError } = await supabase
+          .from('achievement_definitions')
+          .select('*')
+          .order('points_threshold', { ascending: true });
+
+        if (defError) throw defError;
+        setAllDefinitions(definitions || []);
+
         // Fetch user's achievements with definitions
         const { data, error: fetchError } = await supabase
           .from('user_achievements')
@@ -65,8 +75,7 @@ export default function Achievements() {
               points_threshold
             )
           `)
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false });
+          .eq('user_id', user.id);
 
         if (fetchError) throw fetchError;
 
@@ -80,62 +89,74 @@ export default function Achievements() {
           definition: item.achievement_definitions
         })) || [];
 
-        setAchievements(formattedAchievements);
+        // Merge with all definitions to show all possible achievements
+        const mergedAchievements = definitions?.map(def => {
+          const userAchievement = formattedAchievements.find(a => a.achievement_id === def.id);
+          return userAchievement || {
+            achievement_id: def.id,
+            unlocked: false,
+            unlocked_at: null,
+            progress: Math.min(totalPoints, def.points_threshold),
+            definition: def
+          };
+        }) || [];
+
+        setAchievements(mergedAchievements);
       } catch (err) {
         console.error('Error fetching achievements:', err);
-        setError(err instanceof Error ? err.message : 'No scans recorded yet');
-        setAchievements([]);
+        setError(err instanceof Error ? err.message : 'Failed to load achievements');
       } finally {
         setLoading(false);
       }
     };
 
-    fetchAchievements();
-  }, [user]);
+    fetchData();
+  }, [user, totalPoints]);
 
-  // Function to create or update achievements
+  // Function to update achievements when points change
   const updateUserAchievements = async () => {
-    if (!user) return;
+    if (!user || !allDefinitions.length) return;
 
     try {
-      // Get all achievement definitions
-      const { data: definitions, error: defError } = await supabase
-        .from('achievement_definitions')
-        .select('*')
-        .order('points_threshold', { ascending: true });
+      const updates = allDefinitions.map(definition => ({
+        user_id: user.id,
+        achievement_id: definition.id,
+        unlocked: totalPoints >= definition.points_threshold,
+        unlocked_at: totalPoints >= definition.points_threshold ? new Date().toISOString() : null,
+        progress: Math.min(totalPoints, definition.points_threshold)
+      }));
 
-      if (defError) throw defError;
+      // Upsert all achievements at once
+      const { error: upsertError } = await supabase
+        .from('user_achievements')
+        .upsert(updates, {
+          onConflict: 'user_id,achievement_id'
+        });
 
-      // For each definition, check if user qualifies
-      for (const definition of definitions) {
-        const isUnlocked = totalPoints >= definition.points_threshold;
+      if (upsertError) throw upsertError;
+
+      // Update local state
+      setAchievements(prev => prev.map(achievement => {
+        const definition = allDefinitions.find(d => d.id === achievement.achievement_id);
+        if (!definition) return achievement;
         
-        // Upsert the achievement status
-        const { error: upsertError } = await supabase
-          .from('user_achievements')
-          .upsert({
-            user_id: user.id,
-            achievement_id: definition.id,
-            unlocked: isUnlocked,
-            unlocked_at: isUnlocked ? new Date().toISOString() : null,
-            progress: Math.min(totalPoints, definition.points_threshold)
-          }, {
-            onConflict: 'user_id,achievement_id'
-          });
-
-        if (upsertError) throw upsertError;
-      }
+        return {
+          ...achievement,
+          unlocked: totalPoints >= definition.points_threshold,
+          unlocked_at: totalPoints >= definition.points_threshold ? new Date().toISOString() : null,
+          progress: Math.min(totalPoints, definition.points_threshold)
+        };
+      }));
     } catch (err) {
       console.error('Error updating achievements:', err);
     }
   };
 
-  // Call this function when points change
   useEffect(() => {
-    if (totalPoints > 0) {
+    if (totalPoints > 0 && allDefinitions.length > 0) {
       updateUserAchievements();
     }
-  }, [totalPoints]);
+  }, [totalPoints, allDefinitions]);
 
   if (loading) {
     return (
@@ -165,73 +186,70 @@ export default function Achievements() {
         </div>
       </div>
       
-      {achievements.length === 0 ? (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 text-center">
-          <p className="text-blue-800">No achievements found</p>
-          <p className="text-sm text-blue-600 mt-1">
-            Complete more scans to unlock achievements
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {achievements.map((achievement) => (
-            <div 
-              key={achievement.id} 
-              className={`bg-white p-4 rounded-lg shadow border flex items-start ${
-                achievement.unlocked ? 'border-green-200' : 'border-gray-200'
-              }`}
-            >
-              <div className={`p-3 rounded-full mr-4 ${
-                achievement.unlocked ? 'bg-green-100' : 'bg-gray-100'
-              }`}>
-                {achievement.definition.icon_url ? (
-                  <img 
-                    src={achievement.definition.icon_url} 
-                    alt={achievement.definition.name}
-                    className="h-6 w-6"
-                  />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {achievements.map((achievement) => (
+          <div 
+            key={achievement.achievement_id} 
+            className={`bg-white p-4 rounded-lg shadow border flex items-start ${
+              achievement.unlocked ? 'border-green-200' : 'border-gray-200'
+            }`}
+          >
+            <div className={`p-3 rounded-full mr-4 ${
+              achievement.unlocked ? 'bg-green-100' : 'bg-gray-100'
+            }`}>
+              {achievement.definition.icon_url ? (
+                <img 
+                  src={achievement.definition.icon_url} 
+                  alt={achievement.definition.name}
+                  className="h-6 w-6"
+                />
+              ) : achievement.unlocked ? (
+                <AwardIcon className="h-6 w-6 text-green-600" />
+              ) : (
+                <Lock className="h-6 w-6 text-gray-400" />
+              )}
+            </div>
+            <div className="flex-1">
+              <div className="flex justify-between items-start">
+                <h3 className="font-medium">{achievement.definition.name}</h3>
+                {achievement.unlocked ? (
+                  <CheckCircle className="h-5 w-5 text-green-500" />
                 ) : (
-                  <AwardIcon className={`h-6 w-6 ${
-                    achievement.unlocked ? 'text-green-600' : 'text-gray-400'
-                  }`} />
+                  <span className="text-xs text-gray-500">
+                    {achievement.definition.points_threshold} pts
+                  </span>
                 )}
               </div>
-              <div className="flex-1">
-                <div className="flex justify-between items-start">
-                  <h3 className="font-medium">{achievement.definition.name}</h3>
-                  {achievement.unlocked && (
-                    <CheckCircle className="h-5 w-5 text-green-500" />
-                  )}
+              <p className="text-sm text-gray-600">{achievement.definition.description}</p>
+              
+              <div className="mt-2">
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div 
+                    className={`h-2 rounded-full ${
+                      achievement.unlocked ? 'bg-green-500' : 'bg-blue-600'
+                    }`} 
+                    style={{
+                      width: `${Math.min(
+                        (achievement.progress / achievement.definition.points_threshold) * 100, 
+                        100
+                      )}%`
+                    }}
+                  />
                 </div>
-                <p className="text-sm text-gray-600">{achievement.definition.description}</p>
-                
-                {!achievement.unlocked ? (
-                  <div className="mt-2">
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-blue-600 h-2 rounded-full" 
-                        style={{
-                          width: `${Math.min(
-                            (achievement.progress / achievement.definition.points_threshold) * 100, 
-                            100
-                          )}%`
-                        }}
-                      />
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {achievement.progress} / {achievement.definition.points_threshold} points
-                    </p>
-                  </div>
-                ) : (
-                  <p className="text-xs text-green-600 mt-1">
-                    Unlocked on {new Date(achievement.unlocked_at!).toLocaleDateString()}
-                  </p>
-                )}
+                <p className="text-xs text-gray-500 mt-1">
+                  {achievement.unlocked ? (
+                    <span className="text-green-600">
+                      Unlocked on {new Date(achievement.unlocked_at!).toLocaleDateString()}
+                    </span>
+                  ) : (
+                    `${achievement.progress} / ${achievement.definition.points_threshold} points`
+                  )}
+                </p>
               </div>
             </div>
-          ))}
-        </div>
-      )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
